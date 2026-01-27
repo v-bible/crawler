@@ -5,14 +5,14 @@ import path, { basename } from 'path';
 import { updateAnnotations } from '@/lib/ner/nerUtils';
 import { NerDataSchema, type SentenceEntityAnnotation } from '@/lib/ner/schema';
 import { walkDirectoryByGenre, writeChapterContent } from '@/lib/nlp/fileUtils';
+import { parseId } from '@/lib/nlp/getId';
+import { type GenreParams } from '@/lib/nlp/schema';
+import { ChapterTreeSchema } from '@/lib/nlp/treeSchema';
 import {
   generateDataTreeWithAnnotation,
   generateJsonTree,
   generateXmlTree,
-} from '@/lib/nlp/generateData';
-import { parseId } from '@/lib/nlp/getId';
-import { type GenreParams } from '@/lib/nlp/schema';
-import { ChapterTreeSchema } from '@/lib/nlp/treeSchema';
+} from '@/lib/nlp/treeUtils';
 import { logger } from '@/logger/logger';
 import { corpusDir, taskDir } from '@/ner-processing/constant';
 
@@ -98,7 +98,7 @@ const main = async () => {
     const newTree = updateAnnotations(tree, mapSentenceEntityAnnotation);
 
     // NOTE: We don't need to wrap NER label in sentence for json tree
-    const jsonTree = generateJsonTree(newTree);
+    const { content: jsonTree } = generateJsonTree(newTree);
 
     const treeWithAnnotation = generateDataTreeWithAnnotation({
       chapterParams,
@@ -109,7 +109,7 @@ const main = async () => {
       annotations: mapSentenceEntityAnnotation,
     });
 
-    const xmlTree = generateXmlTree(treeWithAnnotation);
+    const { content: xmlTree } = generateXmlTree(treeWithAnnotation);
 
     writeChapterContent({
       params: chapterParams,

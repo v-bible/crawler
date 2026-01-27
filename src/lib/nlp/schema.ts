@@ -5,7 +5,7 @@ import {
   languageCategories,
   subDomainCategories,
   tagCategories,
-} from '@/lib/nlp/mapping';
+} from '@/mapping';
 
 export const CATEGORY_SEPARATOR = '|';
 

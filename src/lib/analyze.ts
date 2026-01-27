@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import fs from 'fs';
 import path from 'path';
 import { ChapterTreeSchema } from '@/lib//nlp/treeSchema';
@@ -122,8 +123,8 @@ const aggregateStats = (filesStats: FileStats[]): AggregatedStats => {
       bibleWords: 0,
       totalNerEntities: 0,
       bibleNerEntities: 0,
-      nerLabelCounts: {},
-      bibleNerLabelCounts: {},
+      nerLabelCounts: {} as NerLabelCounts,
+      bibleNerLabelCounts: {} as NerLabelCounts,
     },
   );
 };

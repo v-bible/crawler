@@ -16,6 +16,12 @@ const subDomainCategories = [
     vietnamese: 'Công giáo',
     categoryType: 'subDomain',
   },
+  {
+    code: 'B',
+    category: 'buddhism',
+    vietnamese: 'Phật giáo',
+    categoryType: 'subDomain',
+  },
 ] as const satisfies Category[];
 
 const genreCategories = [
@@ -486,6 +492,13 @@ const languageCategories = [
     code: 'V',
     category: 'vietnamese',
     vietnamese: 'Việt',
+    categoryType: 'language',
+    isReserved: false,
+  },
+  {
+    code: 'CV',
+    category: 'chinese-vietnamese',
+    vietnamese: 'Hán-Việt',
     categoryType: 'language',
     isReserved: false,
   },

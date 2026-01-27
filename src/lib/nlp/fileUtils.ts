@@ -1,5 +1,5 @@
 import { createReadStream, mkdirSync, readdirSync, writeFileSync } from 'fs';
-import path from 'path';
+import path, { dirname } from 'path';
 import { type ParserOptionsArgs, parseStream } from 'fast-csv';
 import { getChapterId, getDocumentId } from '@/lib/nlp/getId';
 import {
@@ -9,7 +9,31 @@ import {
 } from '@/lib/nlp/schema';
 import { logger } from '@/logger/logger';
 
+export type GetDefaultDocumentPathFunction = (
+  params: ChapterParams & {
+    extension: string;
+    documentTitle?: string;
+    suffix?: string;
+  },
+) => string;
+
+const getDefaultDocumentPath: GetDefaultDocumentPathFunction = (params) => {
+  const documentId = getDocumentId(params);
+
+  let documentFolderPath = `${params.genre}/${documentId}`;
+
+  if (params.documentTitle) {
+    const sanitizedTitle = params.documentTitle.replace(/[/\\?%*:|"<>]/g, '_');
+    documentFolderPath += ` (${sanitizedTitle})`;
+  }
+
+  return `${documentFolderPath}/${getChapterId(params)}${
+    params.suffix ? `_${params.suffix}` : ''
+  }.${params.extension}`;
+};
+
 const writeChapterContent = ({
+  getFileName = getDefaultDocumentPath,
   params,
   baseDir,
   content,
@@ -21,21 +45,17 @@ const writeChapterContent = ({
   content: string;
   extension: string;
   documentTitle?: string;
+  getFileName?: GetDefaultDocumentPathFunction;
 }) => {
   // NOTE: We write to genre dir directly instead of
   // baseDir/domain/subDomain/genre to reduce complexity
-  const baseFolder = `${baseDir}/${params.genre}`;
+  const fileName = `${baseDir}/${getFileName({
+    ...params,
+    documentTitle,
+    extension,
+  })}`;
 
-  const documentId = getDocumentId(params);
-
-  let documentFolderPath = `${baseFolder}/${documentId}`;
-
-  if (documentTitle) {
-    const sanitizedTitle = documentTitle.replace(/[/\\?%*:|"<>]/g, '_');
-    documentFolderPath += ` (${sanitizedTitle})`;
-  }
-
-  const fileName = `${documentFolderPath}/${getChapterId(params)}.${extension}`;
+  const documentFolderPath = dirname(fileName);
 
   try {
     mkdirSync(documentFolderPath, { recursive: true });
@@ -81,4 +101,9 @@ const walkDirectoryByGenre = (
     .map((dirent) => path.join(dirent.parentPath, dirent.name));
 };
 
-export { writeChapterContent, readCsvFileStream, walkDirectoryByGenre };
+export {
+  getDefaultDocumentPath,
+  writeChapterContent,
+  readCsvFileStream,
+  walkDirectoryByGenre,
+};

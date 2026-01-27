@@ -1,13 +1,16 @@
+import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
 import { getPageContent } from '@/hdgmvietnam.com/getPageContent';
 import { getPageContentMd } from '@/hdgmvietnam.com/getPageContentMd';
 import Bluebird from '@/lib/bluebird';
 import { Crawler } from '@/lib/nlp/crawler';
+import { getMetadataFromCSV } from '@/lib/nlp/crawlerUtils';
 
 const main = async () => {
   const crawler = new Crawler({
     name: 'hdgmvietnam.com',
     domain: 'R',
     subDomain: 'C',
+    getMetadataList: () => getMetadataFromCSV(DEFAULT_METADATA_FILE_PATH),
     getMetadataBy: (metadataRow) => {
       return (
         metadataRow.source === 'hdgmvietnam.com' &&
@@ -37,7 +40,9 @@ const main = async () => {
         ]);
       });
     },
-    getPageContent,
+    getPageContentHandler: {
+      inputFn: getPageContent,
+    },
     getPageContentMd,
   });
 

@@ -1,13 +1,16 @@
 import { getChapters } from '@/augustino.net/getChapters';
 import { getPageContent } from '@/augustino.net/getPageContent';
 import { getPageContentMd } from '@/augustino.net/getPageContentMd';
+import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
 import { Crawler } from '@/lib/nlp/crawler';
+import { getMetadataFromCSV } from '@/lib/nlp/crawlerUtils';
 
 const main = async () => {
   const crawler = new Crawler({
     name: 'augustino.net',
     domain: 'R',
     subDomain: 'C',
+    getMetadataList: () => getMetadataFromCSV(DEFAULT_METADATA_FILE_PATH),
     getMetadataBy: (metadataRow) => {
       return (
         metadataRow.source === 'augustino.net' &&
@@ -25,7 +28,9 @@ const main = async () => {
       return !checkpoint.completed && !checkpoint.params.hasChapters;
     },
     getChapters,
-    getPageContent,
+    getPageContentHandler: {
+      inputFn: getPageContent,
+    },
     getPageContentMd,
   });
 
