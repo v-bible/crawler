@@ -6,8 +6,8 @@ import {
   filterNonChapterCheckpoint,
 } from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
-import { getPageContent } from '@/thanhlinh.net/getPageContent';
-import { getPageContentMd } from '@/thanhlinh.net/getPageContentMd';
+import { getPageContent } from '@/sites/thanhlinh.net/getPageContent';
+import { getPageContentMd } from '@/sites/thanhlinh.net/getPageContentMd';
 
 const main = async () => {
   const crawler = new Crawler({

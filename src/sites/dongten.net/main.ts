@@ -1,5 +1,3 @@
-import { getPageContent } from '@/conggiao.org/getPageContent';
-import { getPageContentMd } from '@/conggiao.org/getPageContentMd';
 import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
 import Bluebird from '@/lib/bluebird';
 import {
@@ -8,17 +6,18 @@ import {
   filterNonChapterCheckpoint,
 } from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
+import { getPageContent } from '@/sites/dongten.net/getPageContent';
+import { getPageContentMd } from '@/sites/dongten.net/getPageContentMd';
 
 const main = async () => {
   const crawler = new Crawler({
-    name: 'conggiao.org',
+    name: 'dongten.net',
     domain: 'R',
     subDomain: 'C',
     getMetadataList: () => getMetadataFromCSV(DEFAULT_METADATA_FILE_PATH),
     getMetadataBy: (metadataRow) => {
       return (
-        metadataRow.source === 'conggiao.org' &&
-        metadataRow.sourceType === 'web'
+        metadataRow.source === 'dongten.net' && metadataRow.sourceType === 'web'
       );
     },
     sortCheckpoint: defaultSortCheckpoint,

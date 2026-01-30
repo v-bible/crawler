@@ -1,6 +1,4 @@
 import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
-import { getPageContent } from '@/hdgmvietnam.com/getPageContent';
-import { getPageContentMd } from '@/hdgmvietnam.com/getPageContentMd';
 import Bluebird from '@/lib/bluebird';
 import {
   Crawler,
@@ -8,16 +6,18 @@ import {
   filterNonChapterCheckpoint,
 } from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
+import { getPageContent } from '@/sites/conggiao.org/getPageContent';
+import { getPageContentMd } from '@/sites/conggiao.org/getPageContentMd';
 
 const main = async () => {
   const crawler = new Crawler({
-    name: 'hdgmvietnam.com',
+    name: 'conggiao.org',
     domain: 'R',
     subDomain: 'C',
     getMetadataList: () => getMetadataFromCSV(DEFAULT_METADATA_FILE_PATH),
     getMetadataBy: (metadataRow) => {
       return (
-        metadataRow.source === 'hdgmvietnam.com' &&
+        metadataRow.source === 'conggiao.org' &&
         metadataRow.sourceType === 'web'
       );
     },

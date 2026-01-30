@@ -4,10 +4,10 @@ import {
   filterNonChapterCheckpoint,
 } from '@/lib/crawler/crawler';
 import { getDefaultDocumentPath } from '@/lib/crawler/fileUtils';
-import { getChapters } from '@/rongmotamhon.net/getChapters';
-import { getMetadataList } from '@/rongmotamhon.net/getMetadataList';
-import { getPageContent } from '@/rongmotamhon.net/getPageContent';
-import { getPageContentVie } from '@/rongmotamhon.net/getPageContentVie';
+import { getChapters } from '@/sites/rongmotamhon.net/getChapters';
+import { getMetadataList } from '@/sites/rongmotamhon.net/getMetadataList';
+import { getPageContent } from '@/sites/rongmotamhon.net/getPageContent';
+import { getPageContentVie } from '@/sites/rongmotamhon.net/getPageContentVie';
 
 const main = async () => {
   const crawler = new Crawler({

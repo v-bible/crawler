@@ -1,9 +1,9 @@
-import { getChapters } from '@/augustino.net/getChapters';
-import { getPageContent } from '@/augustino.net/getPageContent';
-import { getPageContentMd } from '@/augustino.net/getPageContentMd';
 import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
 import { Crawler } from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
+import { getChapters } from '@/sites/augustino.net/getChapters';
+import { getPageContent } from '@/sites/augustino.net/getPageContent';
+import { getPageContentMd } from '@/sites/augustino.net/getPageContentMd';
 
 const main = async () => {
   const crawler = new Crawler({
