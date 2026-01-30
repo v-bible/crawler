@@ -2,18 +2,18 @@
 /* eslint-disable no-restricted-syntax */
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
+import { DEFAULT_OUTPUT_FILE_DIR, DEFAULT_TASK_DIR } from '@/constants';
 import { walkDirectoryByGenre } from '@/lib/crawler/fileUtils';
 import { type GenreParams } from '@/lib/crawler/schema';
 import { ChapterTreeSchema } from '@/lib/crawler/treeSchema';
 import { mapTreeToNerData } from '@/lib/ner/schemaMapping';
 import { logger } from '@/logger/logger';
-import { corpusDir, taskDir } from '@/ner-processing/constant';
 
 const main = () => {
   const currentGenre = 'N' satisfies GenreParams['genre'];
 
   // NOTE: Get all json files from dir.
-  const files = walkDirectoryByGenre(corpusDir, currentGenre);
+  const files = walkDirectoryByGenre(DEFAULT_OUTPUT_FILE_DIR, currentGenre);
 
   const jsonFiles = files.filter((file) => file.endsWith('.json'));
 
@@ -32,12 +32,12 @@ const main = () => {
 
     const nerTasks = mapTreeToNerData(treeParse.data);
 
-    const outputDir = path.join(taskDir, currentGenre);
+    const outputDir = path.join(DEFAULT_TASK_DIR, currentGenre);
     mkdirSync(outputDir, { recursive: true });
 
     // NOTE: Write sentences to output file
     const outputFilePath = path.join(
-      taskDir,
+      DEFAULT_TASK_DIR,
       currentGenre,
       `${treeParse.data.root.file.sect.id}.json`,
     );

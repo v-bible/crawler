@@ -1,6 +1,7 @@
 /* eslint-disable no-continue */
 /* eslint-disable no-restricted-syntax */
 import { readFileSync } from 'fs';
+import { DEFAULT_OUTPUT_FILE_DIR } from '@/constants';
 import {
   walkDirectoryByGenre,
   writeChapterContent,
@@ -16,7 +17,6 @@ import {
 import { updateAnnotations } from '@/lib/ner/nerUtils';
 import { type SentenceEntityAnnotation } from '@/lib/ner/schema';
 import { logger } from '@/logger/logger';
-import { corpusDir } from '@/ner-processing/constant';
 
 // Helper function to extract names from footnote text
 const extractNamesFromFootnote = (footnoteText: string): string[] => {
@@ -70,7 +70,7 @@ const main = () => {
   const currentGenre = 'N' satisfies GenreParams['genre'];
 
   // NOTE: Get all json files from dir.
-  const files = walkDirectoryByGenre(corpusDir, currentGenre);
+  const files = walkDirectoryByGenre(DEFAULT_OUTPUT_FILE_DIR, currentGenre);
 
   const jsonFiles = files.filter((file) => file.endsWith('.json'));
 
@@ -169,7 +169,7 @@ const main = () => {
 
     writeChapterContent({
       params: chapterParams,
-      baseDir: corpusDir,
+      baseDir: DEFAULT_OUTPUT_FILE_DIR,
       content: jsonTree,
       extension: 'json',
       documentTitle: newTree.root.file.meta.title,
@@ -177,7 +177,7 @@ const main = () => {
 
     writeChapterContent({
       params: chapterParams,
-      baseDir: corpusDir,
+      baseDir: DEFAULT_OUTPUT_FILE_DIR,
       content: xmlTree,
       extension: 'xml',
       documentTitle: newTree.root.file.meta.title,

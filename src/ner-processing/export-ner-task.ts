@@ -2,9 +2,9 @@
 /* eslint-disable no-restricted-syntax */
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
+import { DEFAULT_TASK_DIR } from '@/constants';
 import { NerDataSchema } from '@/lib/ner/schema';
 import { logger } from '@/logger/logger';
-import { taskDir } from '@/ner-processing/constant';
 
 import 'dotenv/config';
 
@@ -82,7 +82,7 @@ const main = async () => {
     const nerData = nerDataParse.data;
 
     const taskFilePath = path.join(
-      taskDir,
+      DEFAULT_TASK_DIR,
       nerData.data.genreCode,
       `${nerData.data.chapterId}.json`,
     );
