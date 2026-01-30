@@ -78,11 +78,9 @@ To run this project, you will need to add the following environment variables to
 your `.env` file:
 
 - **App configs:**
-
   - `LOG_LEVEL`: Log level.
 
 - **Label Studio configs:**
-
   - `LABEL_STUDIO_URL`: URL of the Label Studio instance. E.g.:
     `http://localhost:8080`.
   - `LABEL_STUDIO_LEGACY_TOKEN`: Legacy token for Label Studio API. You can
@@ -131,7 +129,6 @@ variables.
 
 - `asdf` environment: Please setup `asdf` to install corresponding dependencies
   specified in `.tool-versions` file.
-
   - nodejs: `https://github.com/asdf-vm/asdf-nodejs.git`.
 
 <!-- Run Locally -->
@@ -229,7 +226,7 @@ catholic-resources
 
 > [!NOTE]
 > Any changes to the category references should be reflected in the
-> [`src/lib/nlp/mapping.ts`](./src/lib/nlp/mapping.ts) file.
+> [`src/mapping.ts`](./src/mapping.ts) file.
 
 - Domains:
 
@@ -380,7 +377,6 @@ Tokens` > `Save`.
 The label procedure is as follows:
 
 1.  Extract NER tasks:
-
     - Use script
       [`src/ner-processing/extract-ner-task.ts`](./src/ner-processing/extract-ner-task.ts) to
       extract NER tasks from the corpus data tree.
@@ -463,7 +459,6 @@ The label procedure is as follows:
 > task data, else it will be considered as ground truth data.
 
 2.  Import NER tasks to Label Studio:
-
     - Import the NER tasks by creating a new project and selecting the `dist/task-data`
       folder as the data source, or use script
       [`src/ner-processing/import-ner-task.ts`](./src/ner-processing/import-ner-task.ts)
@@ -471,20 +466,17 @@ The label procedure is as follows:
       to import NER tasks to Label Studio using Label Studio API.
 
 3.  Label NER tasks:
-
     - Use Label Studio to label the NER tasks. The labeling interface is
       configured in the project settings, which is described in the
       [v-bible/nlp-label-studio](https://github.com/v-bible/nlp-label-studio)
       repository.
 
 4.  Export NER labels:
-
     - Use script
       [`src/ner-processing/export-ner-task.ts`](./src/ner-processing/export-ner-task.ts)
       to export the NER tasks from Label Studio to `dist/task-data`.
 
 5.  Inject annotations to data tree:
-
     - Use script
       [`src/ner-processing/inject-annotation.ts`](./src/ner-processing/inject-annotation.ts)
       to inject the annotations from `dist/task-data` to the corpus data tree in

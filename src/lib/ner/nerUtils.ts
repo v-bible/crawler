@@ -1,8 +1,8 @@
-import { type SentenceEntityAnnotation } from '@/lib/ner/schema';
 import {
   type ChapterTreeOutput,
   ChapterTreeSchema,
-} from '@/lib/nlp/treeSchema';
+} from '@/lib/crawler/treeSchema';
+import { type SentenceEntityAnnotation } from '@/lib/ner/schema';
 
 const updateAnnotations = (
   tree: ChapterTreeOutput,

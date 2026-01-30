@@ -1,33 +1,35 @@
 import path from 'path';
 import { ZodError, z } from 'zod/v4';
+import { DEFAULT_CRAWL_TIMEOUT_MS, DEFAULT_OUTPUT_FILE_DIR } from '@/constants';
 import Bluebird, { withBluebirdTimeout } from '@/lib//bluebird';
 import {
   type Checkpoint,
   type WithCheckpointOptions,
   withCheckpoint,
 } from '@/lib/checkpoint';
-import { readCsvFileStream, writeChapterContent } from '@/lib/nlp/fileUtils';
 import {
-  type GenerateTreeOptions,
-  type GenerateTreeParams,
-  generateDataTree,
-  generateJsonTree,
-  generateXmlTree,
-} from '@/lib/nlp/generateData';
+  type GetDefaultDocumentPathFunction,
+  writeChapterContent,
+} from '@/lib/crawler/fileUtils';
 import {
   type ChapterParams,
   type DocumentParams,
   type GenreParams,
   type Metadata,
-  type MetadataRowCSVOutput,
-  MetadataRowCSVSchema,
+  type MetadataOutput,
   MetadataSchema,
   type Page,
   PageSchema,
   type SentenceHeading,
   type TreeFootnote,
-} from '@/lib/nlp/schema';
-import { mapMetadataRowCSVToMetadata } from '@/lib/nlp/schemaMapping';
+} from '@/lib/crawler/schema';
+import {
+  type GenerateTreeFunction,
+  type StringifyTreeFunction,
+  generateDataTree,
+  generateJsonTree,
+  generateXmlTree,
+} from '@/lib/crawler/treeUtils';
 import { logger } from '@/logger/logger';
 
 export type CrawHref<T = Record<string, string>> = {
@@ -41,7 +43,9 @@ export type GetChaptersFunctionHref = CrawHref<{
   mdHref?: string;
 }>;
 
-export type GetMetadataByFunction = (metadata: MetadataRowCSVOutput) => boolean;
+export type GetMetadataListFunction = () => Promise<Metadata[]>;
+export type FilterMetadataFunction = (metadata: MetadataOutput) => boolean;
+
 export type FilterCheckpointFunction = (
   checkpoint: Checkpoint<Metadata>,
 ) => boolean;
@@ -54,8 +58,8 @@ export type GetChaptersFunction<
   T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
 > = (params: {
   resourceHref: CrawHref;
-  documentParams: DocumentParams;
-  metadata: Metadata;
+  documentParams?: DocumentParams;
+  metadata?: Metadata;
 }) => Bluebird<Required<T>[]>;
 
 export type GetPageContentParams<
@@ -63,7 +67,7 @@ export type GetPageContentParams<
 > = {
   resourceHref: T;
   chapterParams: ChapterParams;
-  metadata: Metadata;
+  metadata?: Metadata;
 };
 
 export type GetPageContentFunction<
@@ -74,20 +78,24 @@ export type GetPageContentMdFunction<
   T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
 > = (params: GetPageContentParams<T>) => Bluebird<string>;
 
-export type GenerateMultipleTreesFunction = {
-  extension: string;
-  generateTree: (
-    params: GenerateTreeParams,
-    options?: GenerateTreeOptions,
-  ) => string;
-}[];
+export type GetPageContentHandler = {
+  metadataFilePath?: string;
+  outputDir?: string;
+  inputFn: GetPageContentFunction;
+  outputFn?: GenerateTreeFunction;
+  stringifyFn?: StringifyTreeFunction | StringifyTreeFunction[];
+  getFileName?: GetDefaultDocumentPathFunction;
+};
+
+export const DEFAULT_STRINGIFY_TREE_FUNCTION: StringifyTreeFunction[] = [
+  generateXmlTree,
+  generateJsonTree,
+];
 
 class Crawler {
   name: string;
 
   domainParams: Omit<GenreParams, 'genre'>;
-
-  metadataFilePath: string;
 
   checkpointFilePath: string;
 
@@ -95,7 +103,9 @@ class Crawler {
 
   metadataList: Metadata[] = [];
 
-  getMetadataBy: GetMetadataByFunction;
+  getMetadataList: GetMetadataListFunction;
+
+  filterMetadata?: FilterMetadataFunction;
 
   filterCheckpoint?: FilterCheckpointFunction;
 
@@ -103,154 +113,71 @@ class Crawler {
 
   getChapters: GetChaptersFunction;
 
-  getPageContent: GetPageContentFunction;
+  getPageContentHandler: GetPageContentHandler | GetPageContentHandler[] = [];
 
   // NOTE: Optional function to get page content in Markdown format
   getPageContentMd?: GetPageContentMdFunction;
-
-  // NOTE: Allow multiple tree generation formats
-  generateMultipleTrees: GenerateMultipleTreesFunction;
 
   checkpointOptions: WithCheckpointOptions<Metadata>;
 
   timeout: number;
 
-  constructor({
-    name,
-    domain,
-    subDomain,
-    getMetadataBy,
-    filterCheckpoint,
-    sortCheckpoint,
-    getChapters,
-    getPageContent,
-    getPageContentMd,
-    generateMultipleTrees,
-    metadataFilePath,
-    checkpointFilePath,
-    outputFileDir,
-    checkpointOptions,
-    timeout,
-  }: Omit<GenreParams, 'genre'> & {
-    name: string;
-    getMetadataBy: GetMetadataByFunction;
-    filterCheckpoint?: FilterCheckpointFunction;
-    sortCheckpoint?: SortCheckpointFunction;
-    getChapters: GetChaptersFunction;
-    getPageContent: GetPageContentFunction;
-    getPageContentMd?: GetPageContentMdFunction;
-    generateMultipleTrees?: GenerateMultipleTreesFunction;
-    metadataFilePath?: string;
-    checkpointFilePath?: string;
-    outputFileDir?: string;
-    checkpointOptions?: WithCheckpointOptions<Metadata>;
-    timeout?: number;
-  }) {
-    this.name = name;
+  constructor(
+    args: Omit<GenreParams, 'genre'> & {
+      name: string;
+      getMetadataList: GetMetadataListFunction;
+      getMetadataBy?: FilterMetadataFunction;
+      filterCheckpoint?: FilterCheckpointFunction;
+      sortCheckpoint?: SortCheckpointFunction;
+      getChapters: GetChaptersFunction;
+      getPageContentHandler: GetPageContentHandler | GetPageContentHandler[];
+      getPageContentMd?: GetPageContentMdFunction;
+      checkpointFilePath?: string;
+      outputFileDir?: string;
+      checkpointOptions?: WithCheckpointOptions<Metadata>;
+      timeout?: number;
+    },
+  ) {
+    this.name = args.name;
     this.domainParams = {
-      domain,
-      subDomain,
+      domain: args.domain,
+      subDomain: args.subDomain,
     };
 
-    this.getMetadataBy = getMetadataBy;
-    this.filterCheckpoint = filterCheckpoint;
-    this.sortCheckpoint = sortCheckpoint;
-    this.getChapters = getChapters;
-    this.getPageContent = getPageContent;
-    this.getPageContentMd = getPageContentMd;
+    this.getMetadataList = args.getMetadataList;
+    this.filterMetadata = args.getMetadataBy;
+    this.filterCheckpoint = args.filterCheckpoint;
+    this.sortCheckpoint = args.sortCheckpoint;
 
-    if (!generateMultipleTrees) {
-      generateMultipleTrees = [
-        {
-          extension: 'xml',
-          generateTree: (params) => generateXmlTree(generateDataTree(params)),
-        },
-        {
-          extension: 'json',
-          generateTree: (params) => generateJsonTree(generateDataTree(params)),
-        },
-      ];
-    }
+    this.getChapters = args.getChapters;
+    this.getPageContentHandler = args.getPageContentHandler || [];
+    this.getPageContentMd = args.getPageContentMd;
 
-    this.generateMultipleTrees = generateMultipleTrees;
-
-    if (!metadataFilePath) {
-      metadataFilePath = path.join(__dirname, '../../../data', 'main.tsv');
-    }
-
-    this.metadataFilePath = metadataFilePath;
-
-    if (!checkpointFilePath) {
-      checkpointFilePath = path.join(
+    if (!args.checkpointFilePath) {
+      args.checkpointFilePath = path.join(
         __dirname,
         '../../../dist',
-        `${domain}${subDomain}-${name}-checkpoint.json`,
+        `${args.domain}${args.subDomain}-${args.name}-checkpoint.json`,
       );
     }
 
-    this.checkpointFilePath = checkpointFilePath;
+    this.checkpointFilePath = args.checkpointFilePath;
 
-    if (!outputFileDir) {
-      outputFileDir = path.join(__dirname, '../../../dist/corpus');
-    }
+    this.outputFileDir = args.outputFileDir || DEFAULT_OUTPUT_FILE_DIR;
 
-    this.outputFileDir = outputFileDir;
+    this.checkpointOptions = args.checkpointOptions || {};
 
-    this.checkpointOptions = checkpointOptions || {};
-
-    // Default timeout of 15 minutes in milliseconds
-    this.timeout = timeout || 900000;
-  }
-
-  async getMetadataList() {
-    return new Promise<Metadata[]>((resolve, reject) => {
-      const metadataRowList: MetadataRowCSVOutput[] = [];
-
-      const tsvStream = readCsvFileStream(this.metadataFilePath, {
-        delimiter: '\t',
-        // NOTE: Avoid quote conflicts in TSV files
-        quote: '',
-      });
-
-      tsvStream.on('data', (row: string) => {
-        const parseRes = MetadataRowCSVSchema.safeParse(row);
-
-        if (!parseRes.success) {
-          logger.error('Error parsing row:', {
-            row,
-            error: z.prettifyError(parseRes.error),
-          });
-          return;
-        }
-
-        const metadataRow = parseRes.data;
-
-        if (this.getMetadataBy(metadataRow)) {
-          metadataRowList.push(metadataRow);
-        }
-      });
-
-      tsvStream.on('end', () => {
-        const metadataList = metadataRowList.map((data) => {
-          return mapMetadataRowCSVToMetadata(data) satisfies Metadata;
-        });
-
-        resolve(metadataList);
-      });
-
-      tsvStream.on('error', (error) => {
-        reject(error);
-      });
-    });
+    this.timeout = args.timeout || DEFAULT_CRAWL_TIMEOUT_MS;
   }
 
   async run() {
     // NOTE: Get saved checkpoint
     const { filteredCheckpoint: metadataCheckpoint, setCheckpointComplete } =
       await withCheckpoint<Metadata>({
-        // NOTE: Remember to bind the context to the function to maintain the
-        // correct `this` context
-        getInitialData: this.getMetadataList.bind(this),
+        getInitialData: async () =>
+          (await this.getMetadataList()).filter(
+            (metadata) => this.filterMetadata?.(metadata) ?? true,
+          ),
         getCheckpointId: (data) => data.documentId,
         filterCheckpoint: (checkpoint) => {
           return this.filterCheckpoint
@@ -327,33 +254,51 @@ class Crawler {
           chapterName: props?.chapterName || '',
         };
 
-        try {
-          const pageContent = await withBluebirdTimeout(
-            () =>
-              this.getPageContent({
-                resourceHref: { href, props },
-                chapterParams,
-                metadata,
-              }),
-            this.timeout,
-          );
+        const handlerFn = Array.isArray(this.getPageContentHandler)
+          ? this.getPageContentHandler
+          : [this.getPageContentHandler];
 
-          const parsePageRes = PageSchema.array().safeParse(pageContent);
-
-          if (!parsePageRes.success) {
-            logger.error('Error parsing page content', {
-              error: z.prettifyError(parsePageRes.error),
-              href,
-              chapterParams,
-            });
-
-            // eslint-disable-next-line no-continue
-            continue;
+        // eslint-disable-next-line no-restricted-syntax
+        for await (const handler of handlerFn) {
+          let stringifyFnArr: StringifyTreeFunction[];
+          if (handler && handler.stringifyFn) {
+            if (Array.isArray(handler.stringifyFn)) {
+              stringifyFnArr = handler.stringifyFn.filter(
+                Boolean,
+              ) as StringifyTreeFunction[];
+            } else {
+              stringifyFnArr = [handler.stringifyFn];
+            }
+          } else {
+            stringifyFnArr = DEFAULT_STRINGIFY_TREE_FUNCTION;
           }
 
-          // eslint-disable-next-line no-restricted-syntax
-          for (const { extension, generateTree } of this
-            .generateMultipleTrees) {
+          const outputFn = handler.outputFn || generateDataTree;
+
+          try {
+            const pageContent = await withBluebirdTimeout(
+              () =>
+                handler.inputFn({
+                  resourceHref: { href, props },
+                  chapterParams,
+                  metadata,
+                }),
+              this.timeout,
+            );
+
+            const parsePageRes = PageSchema.array().safeParse(pageContent);
+
+            if (!parsePageRes.success) {
+              logger.error('Error parsing page content', {
+                error: z.prettifyError(parsePageRes.error),
+                href,
+                chapterParams,
+              });
+
+              // eslint-disable-next-line no-continue
+              continue;
+            }
+
             const treeFootnotes = parsePageRes.data
               .flatMap((page) => {
                 return page.sentences.flatMap((sentence) => {
@@ -366,8 +311,8 @@ class Crawler {
                   );
                 });
               })
-              .map((fn, idx) => ({
-                ...fn,
+              .map((footnote, idx) => ({
+                ...footnote,
                 order: idx,
               })) satisfies TreeFootnote[];
 
@@ -377,7 +322,7 @@ class Crawler {
               });
             }) satisfies SentenceHeading[];
 
-            const tree = generateTree({
+            const tree = outputFn({
               chapterParams,
               metadata,
               pages: parsePageRes.data,
@@ -385,15 +330,32 @@ class Crawler {
               headings: treeHeadings,
             });
 
-            writeChapterContent({
-              params: chapterParams,
-              baseDir: this.outputFileDir,
-              content: tree,
-              extension,
-              documentTitle: metadata.title,
-            });
-          }
+            // eslint-disable-next-line no-restricted-syntax
+            for (const stringify of stringifyFnArr) {
+              const { content, extension } = stringify(tree);
 
+              writeChapterContent({
+                params: chapterParams,
+                baseDir: this.outputFileDir,
+                content,
+                extension,
+                documentTitle: metadata.title,
+                getFileName: handler.getFileName,
+              });
+            }
+          } catch (error) {
+            logger.error(
+              `Error processing data for chapter ${props?.chapterNumber} of document ${metadata.documentId}:`,
+              {
+                href,
+                error:
+                  error instanceof ZodError ? z.prettifyError(error) : error,
+              },
+            );
+          }
+        }
+
+        try {
           if (this.getPageContentMd) {
             try {
               const mdContent = await withBluebirdTimeout(

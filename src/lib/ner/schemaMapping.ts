@@ -1,5 +1,5 @@
+import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
 import { type NerData, type SentenceEntityAnnotation } from '@/lib/ner/schema';
-import { type ChapterTreeOutput } from '@/lib/nlp/treeSchema';
 
 const mapAnnotationToNerResult = (annotation: SentenceEntityAnnotation) => {
   return {

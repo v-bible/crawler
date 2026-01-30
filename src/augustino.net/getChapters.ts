@@ -1,7 +1,7 @@
 import retry from 'async-retry';
 import { chromium, devices } from 'playwright';
 import Bluebird from '@/lib/bluebird';
-import { type GetChaptersFunction } from '@/lib/nlp/crawler';
+import { type GetChaptersFunction } from '@/lib/crawler/crawler';
 import { logger } from '@/logger/logger';
 
 const getChapters = (({ resourceHref }) => {

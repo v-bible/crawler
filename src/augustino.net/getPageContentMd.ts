@@ -3,6 +3,7 @@
 import retry from 'async-retry';
 import { chromium, devices } from 'playwright';
 import Bluebird from '@/lib/bluebird';
+import { type GetPageContentMdFunction } from '@/lib/crawler/crawler';
 import {
   cleanupMdProcessor,
   normalizeAsterisk,
@@ -16,7 +17,6 @@ import {
   removeRedundantSpaces,
 } from '@/lib/md/mdUtils';
 import { parseMd } from '@/lib/md/remark';
-import { type GetPageContentMdFunction } from '@/lib/nlp/crawler';
 
 const getPageContentMd = (({ resourceHref }) => {
   return new Bluebird.Promise(async (resolve, reject, onCancel) => {

@@ -2,9 +2,7 @@ import { isValid, parse } from 'date-fns';
 import { u } from 'unist-builder';
 import { toXml } from 'xast-util-to-xml';
 import { type Child, x } from 'xastscript';
-import { wrapNERLabel } from '@/lib/ner/nerUtils';
-import { type SentenceEntityAnnotation } from '@/lib/ner/schema';
-import { getChapterId, getDocumentId } from '@/lib/nlp/getId';
+import { getChapterId, getDocumentId } from '@/lib/crawler/getId';
 import {
   type ChapterParams,
   ChapterParamsSchema,
@@ -15,12 +13,14 @@ import {
   type Sentence,
   type SentenceHeading,
   type TreeFootnote,
-} from '@/lib/nlp/schema';
+} from '@/lib/crawler/schema';
 import {
   type ChapterTree,
   type ChapterTreeOutput,
   ChapterTreeSchema,
-} from '@/lib/nlp/treeSchema';
+} from '@/lib/crawler/treeSchema';
+import { wrapNERLabel } from '@/lib/ner/nerUtils';
+import { type SentenceEntityAnnotation } from '@/lib/ner/schema';
 
 const newLineIndent = (level: number, indentationSize = 2) => {
   return u('text', `\n${' '.repeat(level * indentationSize)}`);
@@ -76,7 +76,17 @@ export type GenerateTreeOptions = {
   parseDate?: (date: string) => Date;
 };
 
-const generateXmlTree = (chapterTree: ChapterTreeOutput): string => {
+export type GenerateTreeFunction = (
+  params: GenerateTreeParams,
+  options?: GenerateTreeOptions,
+) => ChapterTreeOutput;
+
+export type StringifyTreeFunction = (tree: ChapterTreeOutput) => {
+  content: string;
+  extension: string;
+};
+
+const generateXmlTree: StringifyTreeFunction = (chapterTree) => {
   const xmlTree = x(
     'root',
     {},
@@ -269,24 +279,20 @@ const generateXmlTree = (chapterTree: ChapterTreeOutput): string => {
 
   // Convert the tree to XML string
   // REVIEW: Might have some "<" in the sentence, not the "<" opening tag
-  return toXml(xmlTree).replaceAll('&#x3C;', '<').trim();
+  return {
+    content: toXml(xmlTree).replaceAll('&#x3C;', '<').trim(),
+    extension: 'xml',
+  };
 };
 
-const generateJsonTree = (chapterTree: ChapterTreeOutput): string => {
-  return JSON.stringify(chapterTree, null, 2);
+const generateJsonTree: StringifyTreeFunction = (chapterTree) => {
+  return { content: JSON.stringify(chapterTree, null, 2), extension: 'json' };
 };
 
-const generateDataTree = (
-  {
-    chapterParams,
-    metadata,
-    pages,
-    footnotes,
-    headings,
-    annotations,
-  }: GenerateTreeParams,
-  options?: GenerateTreeOptions,
-): ChapterTreeOutput => {
+const generateDataTree = ((
+  { chapterParams, metadata, pages, footnotes, headings, annotations },
+  options,
+) => {
   const {
     transformString = defaultTransformString,
     parseDate = defaultParseDate,
@@ -393,7 +399,7 @@ const generateDataTree = (
   const parsedTree = ChapterTreeSchema.parse(jsonTree);
 
   return parsedTree;
-};
+}) satisfies GenerateTreeFunction;
 
 const generateDataTreeWithAnnotation = (
   {

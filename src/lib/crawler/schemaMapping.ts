@@ -1,5 +1,5 @@
-import { tagCategories } from '@/lib/nlp/mapping';
-import { type Metadata, type MetadataRowCSV } from '@/lib/nlp/schema';
+import { type Metadata, type MetadataRowCSV } from '@/lib/crawler/schema';
+import { tagCategories } from '@/mapping';
 
 const mapMetadataRowCSVToMetadata = (row: MetadataRowCSV): Metadata => {
   return {

@@ -2,10 +2,10 @@
 /* eslint-disable no-restricted-syntax */
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
+import { walkDirectoryByGenre } from '@/lib/crawler/fileUtils';
+import { type GenreParams } from '@/lib/crawler/schema';
+import { ChapterTreeSchema } from '@/lib/crawler/treeSchema';
 import { mapTreeToNerData } from '@/lib/ner/schemaMapping';
-import { walkDirectoryByGenre } from '@/lib/nlp/fileUtils';
-import { type GenreParams } from '@/lib/nlp/schema';
-import { ChapterTreeSchema } from '@/lib/nlp/treeSchema';
 import { logger } from '@/logger/logger';
 import { corpusDir, taskDir } from '@/ner-processing/constant';
 

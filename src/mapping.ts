@@ -1,4 +1,4 @@
-import { type Category } from '@/lib/nlp/schema';
+import { type Category } from '@/lib/crawler/schema';
 
 const domainCategories = [
   {
@@ -14,6 +14,12 @@ const subDomainCategories = [
     code: 'C',
     category: 'catholic',
     vietnamese: 'Công giáo',
+    categoryType: 'subDomain',
+  },
+  {
+    code: 'B',
+    category: 'buddhism',
+    vietnamese: 'Phật giáo',
     categoryType: 'subDomain',
   },
 ] as const satisfies Category[];
@@ -486,6 +492,13 @@ const languageCategories = [
     code: 'V',
     category: 'vietnamese',
     vietnamese: 'Việt',
+    categoryType: 'language',
+    isReserved: false,
+  },
+  {
+    code: 'CV',
+    category: 'chinese-vietnamese',
+    vietnamese: 'Hán-Việt',
     categoryType: 'language',
     isReserved: false,
   },

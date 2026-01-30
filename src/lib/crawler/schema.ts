@@ -5,7 +5,7 @@ import {
   languageCategories,
   subDomainCategories,
   tagCategories,
-} from '@/lib/nlp/mapping';
+} from '@/mapping';
 
 export const CATEGORY_SEPARATOR = '|';
 
@@ -29,10 +29,10 @@ export const IdParamsSchema = z.object({
   genre: z.enum(
     genreCategories.filter((c) => !c.isReserved).map((c) => c.code),
   ),
-  documentNumber: z.number().lt(1000).gte(0),
-  chapterNumber: z.number().lt(1000).gte(0),
-  pageNumber: z.number().lt(1000).gte(0),
-  sentenceNumber: z.number().lt(100).gte(0),
+  documentNumber: z.number().gte(0),
+  chapterNumber: z.number().gte(0),
+  pageNumber: z.number().gte(0),
+  sentenceNumber: z.number().gte(0),
 });
 
 export type IdParams = z.infer<typeof IdParamsSchema>;

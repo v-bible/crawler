@@ -1,9 +1,9 @@
 /* eslint-disable no-continue */
 /* eslint-disable no-restricted-syntax */
 import { readFileSync } from 'fs';
+import { walkDirectoryByGenre } from '@/lib/crawler/fileUtils';
+import { type GenreParams } from '@/lib/crawler/schema';
 import { NerDataSchema } from '@/lib/ner/schema';
-import { walkDirectoryByGenre } from '@/lib/nlp/fileUtils';
-import { type GenreParams } from '@/lib/nlp/schema';
 import { logger } from '@/logger/logger';
 import { taskDir } from '@/ner-processing/constant';
 
