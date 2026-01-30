@@ -1,5 +1,9 @@
 import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
-import { Crawler } from '@/lib/crawler/crawler';
+import {
+  Crawler,
+  defaultSortCheckpoint,
+  filterNonChapterCheckpoint,
+} from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
 import { getChapters } from '@/sites/augustino.net/getChapters';
 import { getPageContent } from '@/sites/augustino.net/getPageContent';
@@ -17,16 +21,8 @@ const main = async () => {
         metadataRow.sourceType === 'web'
       );
     },
-    sortCheckpoint: (a, b) => {
-      return (
-        Number(a.params.requiresManualCheck === true) -
-        Number(b.params.requiresManualCheck === true)
-      );
-    },
-    filterCheckpoint: (checkpoint) => {
-      // REVIEW: Currently we get non chapter pages first
-      return !checkpoint.completed && !checkpoint.params.hasChapters;
-    },
+    sortCheckpoint: defaultSortCheckpoint,
+    filterCheckpoint: filterNonChapterCheckpoint,
     getChapters,
     getPageContentHandler: {
       inputFn: getPageContent,
