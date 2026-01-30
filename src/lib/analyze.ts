@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 import fs from 'fs';
 import path from 'path';
+import { DEFAULT_OUTPUT_FILE_DIR } from '@/constants';
 import { ChapterTreeSchema } from '@/lib/crawler/treeSchema';
 
 type NerLabelCounts = Record<string, number>;
@@ -199,7 +200,7 @@ const printStats = (stats: AggregatedStats): void => {
 };
 
 const main = (): void => {
-  const folder = path.join(__dirname, '../../dist/corpus'); // or your folder path
+  const folder = DEFAULT_OUTPUT_FILE_DIR; // or your folder path
 
   const files = fs
     .readdirSync(folder)

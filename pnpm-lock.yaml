@@ -14,6 +14,12 @@ importers:
       '@stdlib/nlp-sentencize':
         specifier: 0.2.2
         version: 0.2.2
+      '@stricli/auto-complete':
+        specifier: 1.2.5
+        version: 1.2.5
+      '@stricli/core':
+        specifier: 1.2.5
+        version: 1.2.5
       async-retry:
         specifier: 1.3.3
         version: 1.3.3
@@ -1071,6 +1077,13 @@ packages:
     resolution: {integrity: sha512-cSn/FozbEpfR/FlJAoceQtZ8yUJFhZ8RFkbEsxW/7+H4o09yln3lBS0HSfUJISYNtpTNN/2/Fup88vmvwspvwA==}
     engines: {node: '>=0.10.0', npm: '>2.7.0'}
     os: [aix, darwin, freebsd, linux, macos, openbsd, sunos, win32, windows]
+
+  '@stricli/auto-complete@1.2.5':
+    resolution: {integrity: sha512-C6G88Hh4lUWBwiqsxbcA4I1ricSQwiLaOziTWW3NmBoX7WGTW7i7RvyooXMpZk1YMLf2olv5Odxmg127ik1DKQ==}
+    hasBin: true
+
+  '@stricli/core@1.2.5':
+    resolution: {integrity: sha512-+afyztQW7fwWkqmU2WQZbdc3LjnZThWYdtE0l+hykZ1Rvy7YGxZSvsVCS/wZ/2BNv117pQ9TU1GZZRIcPnB4tw==}
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -4482,6 +4495,12 @@ snapshots:
       '@stdlib/assert-has-own-property': 0.2.2
       '@stdlib/assert-has-tostringtag-support': 0.2.2
       '@stdlib/symbol-ctor': 0.2.2
+
+  '@stricli/auto-complete@1.2.5':
+    dependencies:
+      '@stricli/core': 1.2.5
+
+  '@stricli/core@1.2.5': {}
 
   '@tybys/wasm-util@0.10.1':
     dependencies:

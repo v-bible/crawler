@@ -1,6 +1,10 @@
 import path from 'path';
 import { ZodError, z } from 'zod';
-import { DEFAULT_CRAWL_TIMEOUT_MS, DEFAULT_OUTPUT_FILE_DIR } from '@/constants';
+import {
+  DEFAULT_CHECKPOINT_DIR,
+  DEFAULT_CRAWL_TIMEOUT_MS,
+  DEFAULT_OUTPUT_FILE_DIR,
+} from '@/constants';
 import Bluebird, { withBluebirdTimeout } from '@/lib//bluebird';
 import {
   type Checkpoint,
@@ -188,8 +192,7 @@ class Crawler {
 
     if (!args.checkpointFilePath) {
       args.checkpointFilePath = path.join(
-        __dirname,
-        '../../../dist',
+        DEFAULT_CHECKPOINT_DIR,
         `${args.domain}${args.subDomain}-${args.name}-checkpoint.json`,
       );
     }

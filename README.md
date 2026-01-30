@@ -52,6 +52,8 @@
   - [Prerequisites](#bangbang-prerequisites)
   - [Run Locally](#running-run-locally)
 - [Usage](#eyes-usage)
+  - [CLI Usage](#cli-usage)
+  - [Library Usage](#library-usage)
   - [Category Guidelines](#category-guidelines)
     - [Category ID](#category-id)
     - [Folder Structure](#folder-structure)
@@ -157,6 +159,88 @@ pnpm install
 <!-- Usage -->
 
 ## :eyes: Usage
+
+> [!NOTE]
+> **This package can be used both as a CLI tool and as a library.**
+>
+> - **CLI**: Run commands directly from the terminal for convenient web crawling
+> - **Library**: Import and use crawler functions in your TypeScript/JavaScript code
+
+### CLI Usage
+
+The crawler provides a command-line interface for crawling websites easily.
+
+**Basic usage:**
+
+```bash
+# Crawl a specific site
+crawler crawl --site thanhlinh.net
+
+# Crawl all sites
+crawler crawl --site all
+
+# Crawl with verbose logging
+crawler crawl --site augustino.net --verbose
+
+# Crawl with custom timeout (in milliseconds)
+crawler crawl --site conggiao.org --timeout 900000
+```
+
+**Available sites:**
+
+- `augustino.net`
+- `conggiao.org`
+- `dongten.net`
+- `hdgmvietnam.com`
+- `ktcgkpv.org`
+- `rongmotamhon.net`
+- `thanhlinh.net`
+- `all` - Crawl all available sites
+
+**Command flags:**
+
+```
+FLAGS
+     [--site]                 Site to crawl. Available: augustino.net, conggiao.org,
+                              dongten.net, hdgmvietnam.com, ktcgkpv.org, rongmotamhon.net,
+                              thanhlinh.net, or 'all' for all sites [default = all]
+     [--timeout]              Timeout in milliseconds for each crawl operation
+     [--verbose/--noVerbose]  Enable verbose logging
+  -h  --help                  Print help information and exit
+```
+
+**Bash completion:**
+
+Install bash completion to get auto-completion for commands and flags:
+
+```bash
+# Install bash completion
+crawler install
+
+# Uninstall bash completion
+crawler uninstall
+```
+
+### Library Usage
+
+You can also use the crawler programmatically by importing the site modules directly:
+
+```ts
+import { crawler as thanhlinhCrawler } from './src/sites/thanhlinh.net/main';
+
+// Run the crawler
+await thanhlinhCrawler.run();
+```
+
+**Direct execution:**
+
+Each site crawler can also be run directly using tsx:
+
+```bash
+npx tsx src/sites/thanhlinh.net/main.ts
+```
+
+This provides flexibility to run crawlers either through the CLI or programmatically.
 
 ### Category Guidelines
 

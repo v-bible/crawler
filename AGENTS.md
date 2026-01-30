@@ -61,9 +61,25 @@
 
 ### Project Structure Conventions
 
+- **CLI Commands**: Built using Stricli framework in `src/bin/` and `src/commands/`
+  - `src/bin/cli.ts` - CLI entry point with `run()` function
+  - `src/bin/bash-complete.ts` - Bash completion script
+  - `src/commands/{command-name}/` - Command definitions and implementations
+  - Pattern: Split into `command.ts` (CLI definition) and `impl.ts` (implementation)
+  - Use `buildCommand` with loader pattern for lazy loading
+  - Functions use `this: LocalContext` for context binding (not parameters)
+  - Context defined in `src/context.ts` with `buildContext()` function
+
+- **Site Registry**: Dynamic crawler imports in `src/sites/registry.ts`
+  - Maps site names to async crawler factory functions
+  - Allows CLI to load crawlers on demand
+  - Export `AVAILABLE_SITES` array and `siteRegistry` object
+  - Pattern: `siteRegistry[siteName]()` returns crawler instance
+
 - **Site Scrapers**: Each site has its own directory under `src/sites/`
   - Structure: `src/sites/{domain-name}/main.ts` and helper files
-  - `main.ts` defines the Crawler instance
+  - `main.ts` exports crawler instance AND supports direct execution
+  - Use `if (import.meta.url === \`file://\${process.argv\[1]}\`)`for ES modules (not`require.main === module`)
   - Helper files: `getChapters.ts`, `getPageContent.ts`, `getPageContentMd.ts`
   - Follow consistent patterns across all site scrapers
 
@@ -80,11 +96,14 @@
   - Group related constants together (paths, timeouts, defaults)
   - Document defaults clearly with comments
   - Use const assertions (`as const`) where appropriate
+  - **ES Module compatibility**: Use `fileURLToPath(import.meta.url)` for `__dirname` polyfill
   - Examples:
     - `DEFAULT_METADATA_FILE_PATH` - Default metadata CSV path
     - `DEFAULT_OUTPUT_FILE_DIR` - Default corpus output directory
     - `DEFAULT_TASK_DIR` - Default task data directory
     - `DEFAULT_CRAWL_TIMEOUT_MS` - Timeout for page crawling
+    - `DEFAULT_CHECKPOINT_DIR` - Default checkpoint directory
+    - `DEFAULT_CHECKPOINT_FILE_PATH` - Default checkpoint file path
 
 - **Checkpoint Functions**: Export from `src/lib/crawler/crawler.ts`
   - All checkpoint filter/sort functions in one place
@@ -170,6 +189,14 @@ type EnhanceOptions = {
   - ❌ Writing custom utility functions that es-toolkit provides
   - ❌ Using lodash when es-toolkit has equivalent functionality
 
+- **Stricli** - Use for building CLI applications
+  - Use `buildCommand`, `buildRouteMap`, `buildApplication` pattern
+  - Command definitions in `command.ts` with loader pattern
+  - Implementations in `impl.ts` with `this: LocalContext` binding
+  - Use `proposeCompletions` for bash completion (not `buildBashCompletionScript`)
+  - Context created with `buildContext(process)` function
+  - Example patterns in label-studio-converter reference project
+
 **Examples:**
 
 ```typescript
@@ -186,6 +213,30 @@ const uniqueItems = uniq(items);
 const batches = chunk(items, 10);
 const grouped = groupBy(items, (item) => item.category);
 
+// ✅ Good - Stricli command with loader pattern
+export const crawlCommand = buildCommand({
+  loader: async () => {
+    const { crawl } = await import('./impl');
+    return crawl;
+  },
+  parameters: {
+    flags: {
+      site: flags.string({
+        brief: 'Site to crawl',
+        default: 'all',
+      }),
+    },
+  },
+});
+
+// ✅ Good - Implementation with context binding
+export async function crawl(
+  this: LocalContext,
+  flags: { site: string; timeout?: number; verbose?: boolean },
+): Promise<void> {
+  // Implementation
+}
+
 // ❌ Bad - Manual validation when Zod should be used
 if (typeof config.outDir !== 'string') throw new Error('Invalid outDir');
 
@@ -196,6 +247,40 @@ for (let i = 0; i < items.length; i += 10) {
   chunks.push(items.slice(i, i + 10));
 }
 ```
+
+### ES Module Compatibility
+
+**This project uses ES modules (`"type": "module"` in package.json):**
+
+- **Use `import.meta.url` instead of `require.main === module`**:
+
+  ```typescript
+  // ✅ Good - ES module main check
+  if (import.meta.url === `file://${process.argv[1]}`) {
+    main();
+  }
+
+  // ❌ Bad - CommonJS (won't work)
+  if (require.main === module) {
+    main();
+  }
+  ```
+
+- **Use `fileURLToPath` for `__dirname` polyfill**:
+
+  ```typescript
+  // ✅ Good - ES module __dirname
+  import { fileURLToPath } from 'url';
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+
+  // ❌ Bad - CommonJS __dirname (won't work)
+  const PROJECT_ROOT = path.resolve(__dirname, '..');
+  ```
+
+- **Use `.cjs` extension for CommonJS config files**:
+  - ✅ `.eslintrc.cjs` - CommonJS config file
+  - ❌ `.eslintrc.js` - Will be treated as ES module
 
 ### Adding New Site Scrapers
 
@@ -219,12 +304,18 @@ When adding a new site scraper, ensure consistency:
    - Create custom filters only when needed
    - Example: `filterNonChapterCheckpoint` for single-page documents
 
-4. **Update Metadata**:
+4. **Update Site Registry**:
+   - Add site to `src/sites/registry.ts`
+   - Export site name in `AVAILABLE_SITES` array
+   - Add async factory function to `siteRegistry` object
+   - Example: `'thanhlinh.net': async () => (await import('./thanhlinh.net/main')).crawler`
+
+5. **Update Metadata**:
    - Add entries to `data/main.tsv` for new site
    - Set correct `source` field matching domain name
    - Configure `hasChapters`, `requiresManualCheck` flags
 
-5. **Maintain Semantic Clarity**:
+6. **Maintain Semantic Clarity**:
    - Choose names that clearly describe purpose
    - Prefer `chapterParams` over `params` (more semantic)
    - Prefer `resourceHref` over `url` or `link` (consistent with framework)
@@ -293,10 +384,10 @@ pnpm test:run
 **Quick Check All:**
 
 ```bash
-pnpm run check-all
+pnpm run validate
 ```
 
-- Runs type-check, lint, and tests in one command
+- Runs type-check, format:check, lint, and tests in one command
 
 ### 3. Documentation Updates
 
@@ -339,10 +430,11 @@ Before marking work as complete:
 
 ## Project Structure
 
-### This is a Web Scraping Framework
+### This is a Web Scraping Framework with CLI
 
 **Core Components:**
 
+- **CLI Interface** - Built with Stricli in `src/bin/` and `src/commands/`
 - **Crawler Framework** - Generic web scraping engine in `src/lib/crawler/`
 - **Site Scrapers** - Domain-specific implementations in `src/sites/`
 - **NER Processing** - Named entity recognition tools in `src/ner-processing/`
@@ -350,7 +442,12 @@ Before marking work as complete:
 
 ### Key Directories
 
+- `src/bin/` - CLI entry points (cli.ts, bash-complete.ts)
+- `src/commands/` - CLI command implementations
+- `src/context.ts` - CLI context definition
+- `src/app.ts` - Application routes and configuration
 - `src/sites/` - Site-specific scraper implementations
+- `src/sites/registry.ts` - Site registry for dynamic imports
 - `src/lib/crawler/` - Core crawler framework and utilities
 - `src/lib/md/` - Markdown processing utilities
 - `src/lib/ner/` - Named entity recognition utilities
@@ -368,14 +465,26 @@ Before marking work as complete:
 
 ## Common Tasks
 
+### Adding New CLI Commands
+
+1. Create command directory in `src/commands/`
+2. Create `command.ts` with command definition using `buildCommand`
+3. Create `impl.ts` with implementation using `this: LocalContext` pattern
+4. Register in `src/app.ts` routes
+5. Add tests for command functionality
+6. Update README.md with usage examples
+
 ### Adding New Site Scrapers
 
 1. Create site directory in `src/sites/{domain-name}/`
 2. Implement `main.ts` with Crawler configuration
-3. Add helper files as needed: `getChapters.ts`, `getPageContent.ts`, `getPageContentMd.ts`
-4. Import and reuse checkpoint functions from `@/lib/crawler/crawler`
-5. Add metadata entries to `data/main.tsv`
-6. Test with real pages and add fixtures
+3. Export crawler instance for CLI usage
+4. Add ES module main check for direct execution
+5. Add helper files as needed: `getChapters.ts`, `getPageContent.ts`, `getPageContentMd.ts`
+6. Import and reuse checkpoint functions from `@/lib/crawler/crawler`
+7. Register site in `src/sites/registry.ts`
+8. Add metadata entries to `data/main.tsv`
+9. Test with real pages and add fixtures
 
 ### Adding New Library Functions
 
