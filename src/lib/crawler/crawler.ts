@@ -1,5 +1,5 @@
 import path from 'path';
-import { ZodError, z } from 'zod/v4';
+import { ZodError, z } from 'zod';
 import { DEFAULT_CRAWL_TIMEOUT_MS, DEFAULT_OUTPUT_FILE_DIR } from '@/constants';
 import Bluebird, { withBluebirdTimeout } from '@/lib//bluebird';
 import {
@@ -31,6 +31,44 @@ import {
   generateXmlTree,
 } from '@/lib/crawler/treeUtils';
 import { logger } from '@/logger/logger';
+
+// Checkpoint utility functions
+export const defaultFilterCheckpoint = (
+  checkpoint: Checkpoint<Metadata>,
+): boolean => {
+  return !checkpoint.completed;
+};
+
+export const defaultSortCheckpoint = (
+  a: Checkpoint<Metadata>,
+  b: Checkpoint<Metadata>,
+): number => {
+  // Sort by requiresManualCheck (false first), then by document number
+  const manualCheckDiff =
+    Number(a.params.requiresManualCheck === true) -
+    Number(b.params.requiresManualCheck === true);
+
+  if (manualCheckDiff !== 0) return manualCheckDiff;
+
+  return Number(a.params.documentNumber) - Number(b.params.documentNumber);
+};
+
+export const filterNonChapterCheckpoint = (
+  checkpoint: Checkpoint<Metadata>,
+): boolean => {
+  return !checkpoint.completed && !checkpoint.params.hasChapters;
+};
+
+export const filterChapterCheckpoint = (
+  checkpoint: Checkpoint<Metadata>,
+): boolean => {
+  return !checkpoint.completed && checkpoint.params.hasChapters === true;
+};
+
+export const defaultStringifyFunctions: StringifyTreeFunction[] = [
+  generateXmlTree,
+  generateJsonTree,
+];
 
 export type CrawHref<T = Record<string, string>> = {
   href: string;
@@ -86,11 +124,6 @@ export type GetPageContentHandler = {
   stringifyFn?: StringifyTreeFunction | StringifyTreeFunction[];
   getFileName?: GetDefaultDocumentPathFunction;
 };
-
-export const DEFAULT_STRINGIFY_TREE_FUNCTION: StringifyTreeFunction[] = [
-  generateXmlTree,
-  generateJsonTree,
-];
 
 class Crawler {
   name: string;
@@ -270,7 +303,7 @@ class Crawler {
               stringifyFnArr = [handler.stringifyFn];
             }
           } else {
-            stringifyFnArr = DEFAULT_STRINGIFY_TREE_FUNCTION;
+            stringifyFnArr = defaultStringifyFunctions;
           }
 
           const outputFn = handler.outputFn || generateDataTree;
@@ -355,48 +388,38 @@ class Crawler {
           }
         }
 
-        try {
-          if (this.getPageContentMd) {
-            try {
-              const mdContent = await withBluebirdTimeout(
-                () =>
-                  this.getPageContentMd!({
-                    resourceHref: { href, props },
-                    chapterParams,
-                    metadata,
-                  }),
-                this.timeout,
-              );
+        if (this.getPageContentMd) {
+          try {
+            const mdContent = await withBluebirdTimeout(
+              () =>
+                this.getPageContentMd!({
+                  resourceHref: { href, props },
+                  chapterParams,
+                  metadata,
+                }),
+              this.timeout,
+            );
 
-              writeChapterContent({
-                params: chapterParams,
-                baseDir: this.outputFileDir,
-                content: mdContent,
-                extension: 'md',
-                documentTitle: metadata.title,
-              });
-            } catch (error) {
-              logger.error(
-                `Error getting MD content for chapter ${props?.chapterNumber} of document ${metadata.documentId}:`,
-                {
-                  href,
-                  error:
-                    error instanceof ZodError ? z.prettifyError(error) : error,
-                },
-              );
-            }
+            writeChapterContent({
+              params: chapterParams,
+              baseDir: this.outputFileDir,
+              content: mdContent,
+              extension: 'md',
+              documentTitle: metadata.title,
+            });
+          } catch (error) {
+            logger.error(
+              `Error getting MD content for chapter ${props?.chapterNumber} of document ${metadata.documentId}:`,
+              {
+                href,
+                error:
+                  error instanceof ZodError ? z.prettifyError(error) : error,
+              },
+            );
           }
-
-          setCheckpointComplete(checkpoint.id, true);
-        } catch (error) {
-          logger.error(
-            `Error processing chapter ${props?.chapterNumber} for document ${metadata.documentId}:`,
-            {
-              href,
-              error: error instanceof ZodError ? z.prettifyError(error) : error,
-            },
-          );
         }
+
+        setCheckpointComplete(checkpoint.id, true);
       }
     }
   }
