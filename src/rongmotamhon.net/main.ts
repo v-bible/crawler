@@ -1,4 +1,8 @@
-import { Crawler } from '@/lib/crawler/crawler';
+import {
+  Crawler,
+  defaultSortCheckpoint,
+  filterNonChapterCheckpoint,
+} from '@/lib/crawler/crawler';
 import { getDefaultDocumentPath } from '@/lib/crawler/fileUtils';
 import { getChapters } from '@/rongmotamhon.net/getChapters';
 import { getMetadataList } from '@/rongmotamhon.net/getMetadataList';
@@ -11,16 +15,8 @@ const main = async () => {
     domain: 'R',
     subDomain: 'B',
     getMetadataList,
-    sortCheckpoint: (a, b) => {
-      return (
-        Number(a.params.requiresManualCheck === true) -
-        Number(b.params.requiresManualCheck === true)
-      );
-    },
-    filterCheckpoint: (checkpoint) => {
-      // REVIEW: Currently we get non chapter pages first
-      return !checkpoint.completed && !checkpoint.params.hasChapters;
-    },
+    sortCheckpoint: defaultSortCheckpoint,
+    filterCheckpoint: filterNonChapterCheckpoint,
     getChapters,
     getPageContentHandler: [
       {

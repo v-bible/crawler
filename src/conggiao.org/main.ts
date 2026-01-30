@@ -2,7 +2,11 @@ import { getPageContent } from '@/conggiao.org/getPageContent';
 import { getPageContentMd } from '@/conggiao.org/getPageContentMd';
 import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
 import Bluebird from '@/lib/bluebird';
-import { Crawler } from '@/lib/crawler/crawler';
+import {
+  Crawler,
+  defaultSortCheckpoint,
+  filterNonChapterCheckpoint,
+} from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
 
 const main = async () => {
@@ -17,16 +21,8 @@ const main = async () => {
         metadataRow.sourceType === 'web'
       );
     },
-    sortCheckpoint: (a, b) => {
-      return (
-        Number(a.params.requiresManualCheck === true) -
-        Number(b.params.requiresManualCheck === true)
-      );
-    },
-    filterCheckpoint: (checkpoint) => {
-      // REVIEW: Currently we get non chapter pages first
-      return !checkpoint.completed && !checkpoint.params.hasChapters;
-    },
+    sortCheckpoint: defaultSortCheckpoint,
+    filterCheckpoint: filterNonChapterCheckpoint,
     getChapters: ({ resourceHref }) => {
       return new Bluebird.Promise((resolve) => {
         // NOTE: These pages have no chapters
