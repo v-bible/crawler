@@ -2,8 +2,8 @@ import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
 import { getChapters } from '@/ktcgkpv.org/getChapters';
 import { getPageContent } from '@/ktcgkpv.org/getPageContent';
 import Bluebird from '@/lib/bluebird';
-import { Crawler } from '@/lib/nlp/crawler';
-import { getMetadataFromCSV } from '@/lib/nlp/crawlerUtils';
+import { Crawler } from '@/lib/crawler/crawler';
+import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
 
 const main = async () => {
   const crawler = new Crawler({

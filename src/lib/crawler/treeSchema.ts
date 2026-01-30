@@ -1,5 +1,4 @@
 import { z } from 'zod/v4';
-import { SentenceEntityAnnotationSchema } from '@/lib/ner/schema';
 import {
   IdParamsSchema,
   MetadataSchema,
@@ -8,7 +7,8 @@ import {
   SentenceHeadingSchema,
   SingleLanguageSentenceSchema,
   TreeFootnoteSchema,
-} from '@/lib/nlp/schema';
+} from '@/lib/crawler/schema';
+import { SentenceEntityAnnotationSchema } from '@/lib/ner/schema';
 
 export const ChapterTreeSchema = z.object({
   root: z.object({

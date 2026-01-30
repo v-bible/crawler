@@ -1,4 +1,4 @@
-import { type Heading } from '@/lib/nlp/schema';
+import { type Heading } from '@/lib/crawler/schema';
 
 export const reHeading = /\n?^(?<headingLevel>#+) +(?<text>.*)$\n?/gm;
 

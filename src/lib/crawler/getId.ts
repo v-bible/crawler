@@ -5,7 +5,7 @@ import {
   IdParamsSchema,
   type PageParams,
   type SentenceParams,
-} from '@/lib/nlp/schema';
+} from '@/lib/crawler/schema';
 
 const reSentenceId =
   /^(?<domain>[A-Z])(?<subDomain>[A-Z])(?<genre>[A-Z])_(?<documentNumber>0[0-9]{2}|[1-9][0-9]{2})(?:\.(?<chapterNumber>0[0-9]{2}|[1-9][0-9]{2})(?:\.(?<pageNumber>0[0-9]{2}|[1-9][0-9]{2})(?:\.(?<sentenceNumber>0[1-9]|[1-9][0-9]))?)?)?$/;

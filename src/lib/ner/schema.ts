@@ -1,11 +1,11 @@
 import { z } from 'zod/v4';
-import { entityLabelCategories } from '@/lib/ner/mapping';
 import {
   LanguageCodeSchema,
   MetadataSchema,
   MultiLanguageSentenceSchema,
   SentenceTypeSchema,
-} from '@/lib/nlp/schema';
+} from '@/lib/crawler/schema';
+import { entityLabelCategories } from '@/lib/ner/mapping';
 
 export const EntityLabelSchema = z.object({
   label: z.string(),

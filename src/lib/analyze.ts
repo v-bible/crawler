@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import fs from 'fs';
 import path from 'path';
-import { ChapterTreeSchema } from '@/lib//nlp/treeSchema';
+import { ChapterTreeSchema } from '@/lib/crawler/treeSchema';
 
 type NerLabelCounts = Record<string, number>;
 

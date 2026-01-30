@@ -1,5 +1,5 @@
 import Bluebird from '@/lib/bluebird';
-import { type GetChaptersFunction } from '@/lib/nlp/crawler';
+import { type GetChaptersFunction } from '@/lib/crawler/crawler';
 
 const getChapters = (({ resourceHref }) => {
   return new Bluebird.Promise(async (resolve) => {

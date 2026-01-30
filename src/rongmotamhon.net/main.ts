@@ -1,5 +1,5 @@
-import { Crawler } from '@/lib/nlp/crawler';
-import { getDefaultDocumentPath } from '@/lib/nlp/fileUtils';
+import { Crawler } from '@/lib/crawler/crawler';
+import { getDefaultDocumentPath } from '@/lib/crawler/fileUtils';
 import { getChapters } from '@/rongmotamhon.net/getChapters';
 import { getMetadataList } from '@/rongmotamhon.net/getMetadataList';
 import { getPageContent } from '@/rongmotamhon.net/getPageContent';

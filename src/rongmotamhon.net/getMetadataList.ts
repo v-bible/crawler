@@ -2,12 +2,12 @@
 import { PlaywrightBlocker } from '@ghostery/adblocker-playwright';
 import { chromium, devices } from 'playwright';
 import z from 'zod/v4';
-import { getDocumentId } from '@/lib/nlp/getId';
+import { getDocumentId } from '@/lib/crawler/getId';
 import {
   type MetadataInput,
   MetadataOutput,
   MetadataSchema,
-} from '@/lib/nlp/schema';
+} from '@/lib/crawler/schema';
 import { logger } from '@/logger/logger';
 
 export const getMetadataList = async () => {

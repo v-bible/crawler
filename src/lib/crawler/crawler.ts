@@ -10,7 +10,7 @@ import {
 import {
   type GetDefaultDocumentPathFunction,
   writeChapterContent,
-} from '@/lib/nlp/fileUtils';
+} from '@/lib/crawler/fileUtils';
 import {
   type ChapterParams,
   type DocumentParams,
@@ -22,14 +22,14 @@ import {
   PageSchema,
   type SentenceHeading,
   type TreeFootnote,
-} from '@/lib/nlp/schema';
+} from '@/lib/crawler/schema';
 import {
   type GenerateTreeFunction,
   type StringifyTreeFunction,
   generateDataTree,
   generateJsonTree,
   generateXmlTree,
-} from '@/lib/nlp/treeUtils';
+} from '@/lib/crawler/treeUtils';
 import { logger } from '@/logger/logger';
 
 export type CrawHref<T = Record<string, string>> = {

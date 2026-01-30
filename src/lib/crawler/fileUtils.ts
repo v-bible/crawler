@@ -1,12 +1,12 @@
 import { createReadStream, mkdirSync, readdirSync, writeFileSync } from 'fs';
 import path, { dirname } from 'path';
 import { type ParserOptionsArgs, parseStream } from 'fast-csv';
-import { getChapterId, getDocumentId } from '@/lib/nlp/getId';
+import { getChapterId, getDocumentId } from '@/lib/crawler/getId';
 import {
   type ChapterParams,
   type GenreParams,
   type MetadataRowCSV,
-} from '@/lib/nlp/schema';
+} from '@/lib/crawler/schema';
 import { logger } from '@/logger/logger';
 
 export type GetDefaultDocumentPathFunction = (

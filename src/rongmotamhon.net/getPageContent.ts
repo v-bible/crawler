@@ -4,9 +4,9 @@ import { PlaywrightBlocker } from '@ghostery/adblocker-playwright';
 import retry from 'async-retry';
 import { chromium, devices } from 'playwright';
 import Bluebird from '@/lib/bluebird';
-import { type GetPageContentFunction } from '@/lib/nlp/crawler';
-import { getPageId, getSentenceId } from '@/lib/nlp/getId';
-import { type MultiLanguageSentence, type Page } from '@/lib/nlp/schema';
+import { type GetPageContentFunction } from '@/lib/crawler/crawler';
+import { getPageId, getSentenceId } from '@/lib/crawler/getId';
+import { type MultiLanguageSentence, type Page } from '@/lib/crawler/schema';
 
 const getPageContent = (({ resourceHref, chapterParams }) => {
   return new Bluebird.Promise(async (resolve, reject, onCancel) => {

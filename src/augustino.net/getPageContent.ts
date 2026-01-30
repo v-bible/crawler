@@ -3,6 +3,12 @@
 import retry from 'async-retry';
 import { type Page, chromium, devices } from 'playwright';
 import Bluebird from '@/lib/bluebird';
+import { type GetPageContentFunction } from '@/lib/crawler/crawler';
+import { getPageId, getSentenceId } from '@/lib/crawler/getId';
+import {
+  type Footnote,
+  type SingleLanguageSentence,
+} from '@/lib/crawler/schema';
 import { extractFootnote, removeAllFootnote } from '@/lib/md/footnoteUtils';
 import { extractHeading, removeAllHeading } from '@/lib/md/headingUtils';
 import {
@@ -20,9 +26,6 @@ import {
   stripSymbols,
 } from '@/lib/md/mdUtils';
 import { parseMd } from '@/lib/md/remark';
-import { type GetPageContentFunction } from '@/lib/nlp/crawler';
-import { getPageId, getSentenceId } from '@/lib/nlp/getId';
-import { type Footnote, type SingleLanguageSentence } from '@/lib/nlp/schema';
 import { winkNLPInstance } from '@/lib/wink-nlp';
 import { logger } from '@/logger/logger';
 

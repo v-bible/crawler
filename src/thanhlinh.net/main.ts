@@ -1,7 +1,7 @@
 import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
 import Bluebird from '@/lib/bluebird';
-import { Crawler } from '@/lib/nlp/crawler';
-import { getMetadataFromCSV } from '@/lib/nlp/crawlerUtils';
+import { Crawler } from '@/lib/crawler/crawler';
+import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
 import { getPageContent } from '@/thanhlinh.net/getPageContent';
 import { getPageContentMd } from '@/thanhlinh.net/getPageContentMd';
 

@@ -2,9 +2,7 @@ import { isValid, parse } from 'date-fns';
 import { u } from 'unist-builder';
 import { toXml } from 'xast-util-to-xml';
 import { type Child, x } from 'xastscript';
-import { wrapNERLabel } from '@/lib/ner/nerUtils';
-import { type SentenceEntityAnnotation } from '@/lib/ner/schema';
-import { getChapterId, getDocumentId } from '@/lib/nlp/getId';
+import { getChapterId, getDocumentId } from '@/lib/crawler/getId';
 import {
   type ChapterParams,
   ChapterParamsSchema,
@@ -15,12 +13,14 @@ import {
   type Sentence,
   type SentenceHeading,
   type TreeFootnote,
-} from '@/lib/nlp/schema';
+} from '@/lib/crawler/schema';
 import {
   type ChapterTree,
   type ChapterTreeOutput,
   ChapterTreeSchema,
-} from '@/lib/nlp/treeSchema';
+} from '@/lib/crawler/treeSchema';
+import { wrapNERLabel } from '@/lib/ner/nerUtils';
+import { type SentenceEntityAnnotation } from '@/lib/ner/schema';
 
 const newLineIndent = (level: number, indentationSize = 2) => {
   return u('text', `\n${' '.repeat(level * indentationSize)}`);

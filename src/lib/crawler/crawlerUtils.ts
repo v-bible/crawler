@@ -1,11 +1,11 @@
 import z from 'zod/v4';
-import { readCsvFileStream } from '@/lib/nlp/fileUtils';
+import { readCsvFileStream } from '@/lib/crawler/fileUtils';
 import {
   type Metadata,
   type MetadataOutput,
   MetadataRowCSVSchema,
-} from '@/lib/nlp/schema';
-import { mapMetadataRowCSVToMetadata } from '@/lib/nlp/schemaMapping';
+} from '@/lib/crawler/schema';
+import { mapMetadataRowCSVToMetadata } from '@/lib/crawler/schemaMapping';
 import { logger } from '@/logger/logger';
 
 export const getMetadataFromCSV = async (metadataFilePath: string) => {

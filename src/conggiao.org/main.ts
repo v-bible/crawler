@@ -2,8 +2,8 @@ import { getPageContent } from '@/conggiao.org/getPageContent';
 import { getPageContentMd } from '@/conggiao.org/getPageContentMd';
 import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
 import Bluebird from '@/lib/bluebird';
-import { Crawler } from '@/lib/nlp/crawler';
-import { getMetadataFromCSV } from '@/lib/nlp/crawlerUtils';
+import { Crawler } from '@/lib/crawler/crawler';
+import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
 
 const main = async () => {
   const crawler = new Crawler({

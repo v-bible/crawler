@@ -5,7 +5,7 @@ import Bluebird from '@/lib/bluebird';
 import {
   type GetChaptersFunction,
   GetChaptersFunctionHref,
-} from '@/lib/nlp/crawler';
+} from '@/lib/crawler/crawler';
 import { logger } from '@/logger/logger';
 
 const getChapters = (({ resourceHref }) => {

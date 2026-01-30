@@ -1,4 +1,4 @@
-import { type Footnote } from '@/lib/nlp/schema';
+import { type Footnote } from '@/lib/crawler/schema';
 
 // NOTE: Footnote label can be any alphanumeric string wrapped in square
 // brackets. E.g. [1], [note], \\[1] etc.

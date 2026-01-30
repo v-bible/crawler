@@ -1,4 +1,4 @@
-import { type Category } from '@/lib/nlp/schema';
+import { type Category } from '@/lib/crawler/schema';
 
 const domainCategories = [
   {
