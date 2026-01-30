@@ -19,7 +19,6 @@ const getChapters = (({ resourceHref }) => {
     try {
       // Set up cancellation handler after resources are created
       onCancel!(async () => {
-        await page.close();
         await context.close();
         await browser.close();
 
@@ -87,7 +86,6 @@ const getChapters = (({ resourceHref }) => {
       resolve(chapters);
     } catch (error) {
       // Clean up resources on error
-      await page.close();
       await context.close();
       await browser.close();
 

@@ -16,14 +16,15 @@ const getPageContentVie = (({ resourceHref, chapterParams }) => {
     const context = await browser.newContext(devices['Desktop Chrome']);
     const page = await context.newPage();
 
-    PlaywrightBlocker.fromPrebuiltAdsAndTracking(fetch).then((blocker) => {
-      blocker.enableBlockingInPage(page);
-    });
-
     try {
+      await PlaywrightBlocker.fromPrebuiltAdsAndTracking(fetch).then(
+        (blocker) => {
+          blocker.enableBlockingInPage(page);
+        },
+      );
+
       // Set up cancellation handler after resources are created
       onCancel!(async () => {
-        await page.close();
         await context.close();
         await browser.close();
 
@@ -50,6 +51,9 @@ const getPageContentVie = (({ resourceHref, chapterParams }) => {
       });
 
       const bodyContent = await bodyLocator.textContent();
+
+      await context.close();
+      await browser.close();
 
       const sentences =
         bodyContent
@@ -81,7 +85,6 @@ const getPageContentVie = (({ resourceHref, chapterParams }) => {
       ]);
     } catch (error) {
       // Clean up resources on error
-      await page.close();
       await context.close();
       await browser.close();
 

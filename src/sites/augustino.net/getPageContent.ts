@@ -97,7 +97,6 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
     try {
       // Set up cancellation handler after resources are created
       onCancel!(async () => {
-        await page.close();
         await context.close();
         await browser.close();
 
@@ -271,7 +270,6 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
       resolve(pageData);
     } catch (error) {
       // Clean up resources on error
-      await page.close();
       await context.close();
       await browser.close();
 
