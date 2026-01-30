@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
+import { DEFAULT_CHECKPOINT_FILE_PATH } from '@/constants';
 import { logger } from '@/logger/logger';
 
 export type Checkpoint<T extends Record<string, unknown>> = {
@@ -40,7 +41,7 @@ const withCheckpoint = async <T extends Record<string, unknown>>({
   getCheckpointId,
   filterCheckpoint,
   sortCheckpoint,
-  filePath = path.join(__dirname, '../../', './checkpoint.json'),
+  filePath = DEFAULT_CHECKPOINT_FILE_PATH,
   options,
 }: WithCheckpointParams<T>): Promise<WithCheckpointReturn<T>> => {
   const { forceAll = false, forceCheckpointId = [] } = options || {};

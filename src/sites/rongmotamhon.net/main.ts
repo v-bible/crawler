@@ -9,31 +9,34 @@ import { getMetadataList } from '@/sites/rongmotamhon.net/getMetadataList';
 import { getPageContent } from '@/sites/rongmotamhon.net/getPageContent';
 import { getPageContentVie } from '@/sites/rongmotamhon.net/getPageContentVie';
 
-const main = async () => {
-  const crawler = new Crawler({
-    name: 'rongmotamhon.net',
-    domain: 'R',
-    subDomain: 'B',
-    getMetadataList,
-    sortCheckpoint: defaultSortCheckpoint,
-    filterCheckpoint: filterNonChapterCheckpoint,
-    getChapters,
-    getPageContentHandler: [
-      {
-        inputFn: getPageContent,
-      },
-      {
-        inputFn: getPageContentVie,
-        getFileName: (params) =>
-          getDefaultDocumentPath({
-            ...params,
-            suffix: 'vie',
-          }),
-      },
-    ],
-  });
+export const crawler = new Crawler({
+  name: 'rongmotamhon.net',
+  domain: 'R',
+  subDomain: 'B',
+  getMetadataList,
+  sortCheckpoint: defaultSortCheckpoint,
+  filterCheckpoint: filterNonChapterCheckpoint,
+  getChapters,
+  getPageContentHandler: [
+    {
+      inputFn: getPageContent,
+    },
+    {
+      inputFn: getPageContentVie,
+      getFileName: (params) =>
+        getDefaultDocumentPath({
+          ...params,
+          suffix: 'vie',
+        }),
+    },
+  ],
+});
 
+const main = async () => {
   await crawler.run();
 };
 
-main();
+// Run directly if this is the main module
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}

@@ -9,28 +9,30 @@ import { getChapters } from '@/sites/augustino.net/getChapters';
 import { getPageContent } from '@/sites/augustino.net/getPageContent';
 import { getPageContentMd } from '@/sites/augustino.net/getPageContentMd';
 
-const main = async () => {
-  const crawler = new Crawler({
-    name: 'augustino.net',
-    domain: 'R',
-    subDomain: 'C',
-    getMetadataList: () => getMetadataFromCSV(DEFAULT_METADATA_FILE_PATH),
-    getMetadataBy: (metadataRow) => {
-      return (
-        metadataRow.source === 'augustino.net' &&
-        metadataRow.sourceType === 'web'
-      );
-    },
-    sortCheckpoint: defaultSortCheckpoint,
-    filterCheckpoint: filterNonChapterCheckpoint,
-    getChapters,
-    getPageContentHandler: {
-      inputFn: getPageContent,
-    },
-    getPageContentMd,
-  });
+export const crawler = new Crawler({
+  name: 'augustino.net',
+  domain: 'R',
+  subDomain: 'C',
+  getMetadataList: () => getMetadataFromCSV(DEFAULT_METADATA_FILE_PATH),
+  getMetadataBy: (metadataRow) => {
+    return (
+      metadataRow.source === 'augustino.net' && metadataRow.sourceType === 'web'
+    );
+  },
+  sortCheckpoint: defaultSortCheckpoint,
+  filterCheckpoint: filterNonChapterCheckpoint,
+  getChapters,
+  getPageContentHandler: {
+    inputFn: getPageContent,
+  },
+  getPageContentMd,
+});
 
+const main = async () => {
   await crawler.run();
 };
 
-main();
+// Run directly if this is the main module
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}
