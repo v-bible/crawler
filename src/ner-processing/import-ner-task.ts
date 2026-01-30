@@ -1,11 +1,11 @@
 /* eslint-disable no-continue */
 /* eslint-disable no-restricted-syntax */
 import { readFileSync } from 'fs';
+import { DEFAULT_TASK_DIR } from '@/constants';
 import { walkDirectoryByGenre } from '@/lib/crawler/fileUtils';
 import { type GenreParams } from '@/lib/crawler/schema';
 import { NerDataSchema } from '@/lib/ner/schema';
 import { logger } from '@/logger/logger';
-import { taskDir } from '@/ner-processing/constant';
 
 import 'dotenv/config';
 
@@ -18,7 +18,7 @@ const main = async () => {
   const currentGenre = 'N' satisfies GenreParams['genre'];
 
   // NOTE: Get all json files from dir.
-  const files = walkDirectoryByGenre(taskDir, currentGenre);
+  const files = walkDirectoryByGenre(DEFAULT_TASK_DIR, currentGenre);
 
   const jsonFiles = files.filter((file) => file.endsWith('.json'));
 

@@ -1,32 +1,27 @@
 import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
-import { getPageContent } from '@/hdgmvietnam.com/getPageContent';
-import { getPageContentMd } from '@/hdgmvietnam.com/getPageContentMd';
 import Bluebird from '@/lib/bluebird';
-import { Crawler } from '@/lib/crawler/crawler';
+import {
+  Crawler,
+  defaultSortCheckpoint,
+  filterNonChapterCheckpoint,
+} from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
+import { getPageContent } from '@/sites/dongten.net/getPageContent';
+import { getPageContentMd } from '@/sites/dongten.net/getPageContentMd';
 
 const main = async () => {
   const crawler = new Crawler({
-    name: 'hdgmvietnam.com',
+    name: 'dongten.net',
     domain: 'R',
     subDomain: 'C',
     getMetadataList: () => getMetadataFromCSV(DEFAULT_METADATA_FILE_PATH),
     getMetadataBy: (metadataRow) => {
       return (
-        metadataRow.source === 'hdgmvietnam.com' &&
-        metadataRow.sourceType === 'web'
+        metadataRow.source === 'dongten.net' && metadataRow.sourceType === 'web'
       );
     },
-    sortCheckpoint: (a, b) => {
-      return (
-        Number(a.params.requiresManualCheck === true) -
-        Number(b.params.requiresManualCheck === true)
-      );
-    },
-    filterCheckpoint: (checkpoint) => {
-      // REVIEW: Currently we get non chapter pages first
-      return !checkpoint.completed && !checkpoint.params.hasChapters;
-    },
+    sortCheckpoint: defaultSortCheckpoint,
+    filterCheckpoint: filterNonChapterCheckpoint,
     getChapters: ({ resourceHref }) => {
       return new Bluebird.Promise((resolve) => {
         // NOTE: These pages have no chapters

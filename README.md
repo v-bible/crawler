@@ -1,41 +1,42 @@
 <div align="center">
 
-  <h1>nlp</h1>
+  <h1>Crawler</h1>
 
   <p>
-    Natural Language Processing (NLP) resources
+    A collection of web crawlers to crawl Catholic resources in Vietnamese
+    language
   </p>
 
 <!-- Badges -->
 <p>
-  <a href="https://github.com/v-bible/nlp/graphs/contributors">
-    <img src="https://img.shields.io/github/contributors/v-bible/nlp" alt="contributors" />
+  <a href="https://github.com/v-bible/crawler/graphs/contributors">
+    <img src="https://img.shields.io/github/contributors/v-bible/crawler" alt="contributors" />
   </a>
   <a href="">
-    <img src="https://img.shields.io/github/last-commit/v-bible/nlp" alt="last update" />
+    <img src="https://img.shields.io/github/last-commit/v-bible/crawler" alt="last update" />
   </a>
-  <a href="https://github.com/v-bible/nlp/network/members">
-    <img src="https://img.shields.io/github/forks/v-bible/nlp" alt="forks" />
+  <a href="https://github.com/v-bible/crawler/network/members">
+    <img src="https://img.shields.io/github/forks/v-bible/crawler" alt="forks" />
   </a>
-  <a href="https://github.com/v-bible/nlp/stargazers">
-    <img src="https://img.shields.io/github/stars/v-bible/nlp" alt="stars" />
+  <a href="https://github.com/v-bible/crawler/stargazers">
+    <img src="https://img.shields.io/github/stars/v-bible/crawler" alt="stars" />
   </a>
-  <a href="https://github.com/v-bible/nlp/issues/">
-    <img src="https://img.shields.io/github/issues/v-bible/nlp" alt="open issues" />
+  <a href="https://github.com/v-bible/crawler/issues/">
+    <img src="https://img.shields.io/github/issues/v-bible/crawler" alt="open issues" />
   </a>
-  <a href="https://github.com/v-bible/nlp/blob/main/LICENSE.md">
-    <img src="https://img.shields.io/github/license/v-bible/nlp.svg" alt="license" />
+  <a href="https://github.com/v-bible/crawler/blob/main/LICENSE.md">
+    <img src="https://img.shields.io/github/license/v-bible/crawler.svg" alt="license" />
   </a>
 </p>
 
 <h4>
-    <a href="https://github.com/v-bible/nlp/">View Demo</a>
+    <a href="https://github.com/v-bible/crawler/">View Demo</a>
   <span> · </span>
-    <a href="https://github.com/v-bible/nlp">Documentation</a>
+    <a href="https://github.com/v-bible/crawler">Documentation</a>
   <span> · </span>
-    <a href="https://github.com/v-bible/nlp/issues/">Report Bug</a>
+    <a href="https://github.com/v-bible/crawler/issues/">Report Bug</a>
   <span> · </span>
-    <a href="https://github.com/v-bible/nlp/issues/">Request Feature</a>
+    <a href="https://github.com/v-bible/crawler/issues/">Request Feature</a>
   </h4>
 </div>
 
@@ -90,8 +91,8 @@ your `.env` file:
     `src/ner-processing/export-ner-task.ts` scripts.
 
 > [!NOTE]
-> These environments only required for `ner-processing` scripts to connect to
-> Label Studio instance.
+> These Label Studio environments only required for `ner-processing` scripts to
+> connect to Label Studio instance.
 
 E.g:
 
@@ -138,13 +139,13 @@ variables.
 Clone the project:
 
 ```bash
-git clone https://github.com/v-bible/nlp.git
+git clone https://github.com/v-bible/crawler.git
 ```
 
 Go to the project directory:
 
 ```bash
-cd nlp
+cd crawler
 ```
 
 Install dependencies:
@@ -358,7 +359,7 @@ and is updated periodically.
 
 Please use [Label Studio](https://labelstud.io/) to label the NER data. Please
 refer to the
-[v-bible/nlp-label-studio](https://github.com/v-bible/nlp-label-studio) for
+[v-bible/crawler-label-studio](https://github.com/v-bible/crawler-label-studio) for
 setuping Label Studio.
 
 #### Getting API Token
@@ -468,7 +469,7 @@ The label procedure is as follows:
 3.  Label NER tasks:
     - Use Label Studio to label the NER tasks. The labeling interface is
       configured in the project settings, which is described in the
-      [v-bible/nlp-label-studio](https://github.com/v-bible/nlp-label-studio)
+      [v-bible/crawler-label-studio](https://github.com/v-bible/crawler-label-studio)
       repository.
 
 4.  Export NER labels:
@@ -486,8 +487,8 @@ The label procedure is as follows:
 
 ## :wave: Contributing
 
-<a href="https://github.com/v-bible/nlp/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=v-bible/nlp" />
+<a href="https://github.com/v-bible/crawler/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=v-bible/crawler" />
 </a>
 
 Contributions are always welcome!
@@ -517,4 +518,4 @@ See the **[LICENSE.md](./LICENSE.md)** file for full details.
 Duong Vinh - [@duckymomo20012](https://twitter.com/duckymomo20012) -
 tienvinh.duong4@gmail.com
 
-Project Link: [https://github.com/v-bible/nlp](https://github.com/v-bible/nlp).
+Project Link: [https://github.com/v-bible/crawler](https://github.com/v-bible/crawler).

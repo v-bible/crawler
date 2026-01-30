@@ -1,9 +1,9 @@
 import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
-import { getChapters } from '@/ktcgkpv.org/getChapters';
-import { getPageContent } from '@/ktcgkpv.org/getPageContent';
 import Bluebird from '@/lib/bluebird';
-import { Crawler } from '@/lib/crawler/crawler';
+import { Crawler, defaultSortCheckpoint } from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
+import { getChapters } from '@/sites/ktcgkpv.org/getChapters';
+import { getPageContent } from '@/sites/ktcgkpv.org/getPageContent';
 
 const main = async () => {
   const crawler = new Crawler({
@@ -16,12 +16,7 @@ const main = async () => {
         metadataRow.source === 'ktcgkpv.org' && metadataRow.sourceType === 'web'
       );
     },
-    sortCheckpoint: (a, b) => {
-      return (
-        Number(a.params.requiresManualCheck === true) -
-        Number(b.params.requiresManualCheck === true)
-      );
-    },
+    sortCheckpoint: defaultSortCheckpoint,
     getChapters,
     getPageContentHandler: {
       inputFn: getPageContent,

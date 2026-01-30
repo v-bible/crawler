@@ -2,6 +2,7 @@
 /* eslint-disable no-restricted-syntax */
 import { accessSync, readFileSync } from 'fs';
 import path, { basename } from 'path';
+import { DEFAULT_OUTPUT_FILE_DIR, DEFAULT_TASK_DIR } from '@/constants';
 import {
   walkDirectoryByGenre,
   writeChapterContent,
@@ -17,18 +18,21 @@ import {
 import { updateAnnotations } from '@/lib/ner/nerUtils';
 import { NerDataSchema, type SentenceEntityAnnotation } from '@/lib/ner/schema';
 import { logger } from '@/logger/logger';
-import { corpusDir, taskDir } from '@/ner-processing/constant';
 
 const main = async () => {
   const currentGenre = 'N' satisfies GenreParams['genre'];
 
   // NOTE: Get all json files from dir.
-  const files = walkDirectoryByGenre(corpusDir, currentGenre);
+  const files = walkDirectoryByGenre(DEFAULT_OUTPUT_FILE_DIR, currentGenre);
 
   const jsonFiles = files.filter((file) => file.endsWith('.json'));
 
   for await (const corpusFilePath of jsonFiles) {
-    const taskFile = path.join(taskDir, currentGenre, basename(corpusFilePath));
+    const taskFile = path.join(
+      DEFAULT_TASK_DIR,
+      currentGenre,
+      basename(corpusFilePath),
+    );
 
     // Check if annotation file exists
     try {
@@ -116,7 +120,7 @@ const main = async () => {
 
     writeChapterContent({
       params: chapterParams,
-      baseDir: corpusDir,
+      baseDir: DEFAULT_OUTPUT_FILE_DIR,
       content: jsonTree,
       extension: 'json',
       documentTitle: newTree.root.file.meta.title,
@@ -124,7 +128,7 @@ const main = async () => {
 
     writeChapterContent({
       params: chapterParams,
-      baseDir: corpusDir,
+      baseDir: DEFAULT_OUTPUT_FILE_DIR,
       content: xmlTree,
       extension: 'xml',
       documentTitle: newTree.root.file.meta.title,

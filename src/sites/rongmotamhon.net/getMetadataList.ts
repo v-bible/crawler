@@ -1,7 +1,7 @@
 /* eslint-disable no-await-in-loop */
 import { PlaywrightBlocker } from '@ghostery/adblocker-playwright';
 import { chromium, devices } from 'playwright';
-import z from 'zod/v4';
+import z from 'zod';
 import { getDocumentId } from '@/lib/crawler/getId';
 import {
   type MetadataInput,
