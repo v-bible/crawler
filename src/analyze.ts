@@ -16,19 +16,23 @@ interface FileStats {
   nerLabelCounts: NerLabelCounts;
 }
 
+interface GenreStats {
+  files: number;
+  pages: number;
+  sentences: number;
+  words: number;
+  nerEntities: number;
+  nerLabelCounts: NerLabelCounts;
+}
+
 interface AggregatedStats {
   totalFiles: number;
   totalPages: number;
   totalSentences: number;
   totalWords: number;
-  bibleFiles: number;
-  biblePages: number;
-  bibleSentences: number;
-  bibleWords: number;
   totalNerEntities: number;
-  bibleNerEntities: number;
   nerLabelCounts: NerLabelCounts;
-  bibleNerLabelCounts: NerLabelCounts;
+  genreStats: Record<string, GenreStats>;
 }
 
 const analyzeFile = (filePath: string, genre: string): FileStats => {
@@ -95,20 +99,32 @@ const aggregateStats = (filesStats: FileStats[]): AggregatedStats => {
         acc.nerLabelCounts[label] = (acc.nerLabelCounts[label] || 0) + count;
       }
 
-      // Check if this is Bible-related data (genres N or O)
-      if (file.genre === 'N' || file.genre === 'O') {
-        acc.bibleFiles += 1;
-        acc.biblePages += file.pageCount;
-        acc.bibleSentences += file.sentenceCount;
-        acc.bibleWords += file.totalWords;
-        acc.bibleNerEntities += file.nerEntityCount;
+      // Initialize genre stats if not exists
+      if (!acc.genreStats[file.genre]) {
+        acc.genreStats[file.genre] = {
+          files: 0,
+          pages: 0,
+          sentences: 0,
+          words: 0,
+          nerEntities: 0,
+          nerLabelCounts: {},
+        };
+      }
 
-        // Aggregate Bible NER label counts
-        // eslint-disable-next-line no-restricted-syntax
-        for (const [label, count] of Object.entries(file.nerLabelCounts)) {
-          acc.bibleNerLabelCounts[label] =
-            (acc.bibleNerLabelCounts[label] || 0) + count;
-        }
+      // Aggregate per-genre stats
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      const genreStat = acc.genreStats[file.genre]!;
+      genreStat.files += 1;
+      genreStat.pages += file.pageCount;
+      genreStat.sentences += file.sentenceCount;
+      genreStat.words += file.totalWords;
+      genreStat.nerEntities += file.nerEntityCount;
+
+      // Aggregate genre-specific NER label counts
+      // eslint-disable-next-line no-restricted-syntax
+      for (const [label, count] of Object.entries(file.nerLabelCounts)) {
+        genreStat.nerLabelCounts[label] =
+          (genreStat.nerLabelCounts[label] || 0) + count;
       }
 
       return acc;
@@ -118,84 +134,101 @@ const aggregateStats = (filesStats: FileStats[]): AggregatedStats => {
       totalPages: 0,
       totalSentences: 0,
       totalWords: 0,
-      bibleFiles: 0,
-      biblePages: 0,
-      bibleSentences: 0,
-      bibleWords: 0,
       totalNerEntities: 0,
-      bibleNerEntities: 0,
       nerLabelCounts: {} as NerLabelCounts,
-      bibleNerLabelCounts: {} as NerLabelCounts,
+      genreStats: {} as Record<string, GenreStats>,
     },
   );
 };
 
 const printStats = (stats: AggregatedStats): void => {
-  console.log('\nAGGREGATED CORPUS STATS');
-  console.log('----------------------------');
+  console.log('\nOVERALL CORPUS STATS');
+  console.log('==============================');
   console.log(`Total files: ${stats.totalFiles}`);
   console.log(`Total pages: ${stats.totalPages}`);
   console.log(`Total sentences: ${stats.totalSentences}`);
   console.log(`Total words: ${stats.totalWords}`);
+  console.log(`Total NER entities: ${stats.totalNerEntities}`);
   console.log(
     `Avg words per sentence: ${(stats.totalWords / stats.totalSentences).toFixed(2)}`,
   );
 
-  console.log('\nBIBLE DATA STATS (Genres N & O)');
-  console.log('-----------------------------------');
-  console.log(`Bible files: ${stats.bibleFiles}`);
-  console.log(`Bible pages: ${stats.biblePages}`);
-  console.log(`Bible sentences: ${stats.bibleSentences}`);
-  console.log(`Bible words: ${stats.bibleWords}`);
-  if (stats.bibleSentences > 0) {
-    console.log(
-      `Avg words per Bible sentence: ${(stats.bibleWords / stats.bibleSentences).toFixed(2)}`,
+  // Sort genres alphabetically
+  const sortedGenres = Object.keys(stats.genreStats).sort();
+
+  console.log('\n\nSTATS BY GENRE');
+  console.log('==============================');
+
+  // eslint-disable-next-line no-restricted-syntax
+  for (const genre of sortedGenres) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const genreStat = stats.genreStats[genre]!;
+    const filesPercent = ((genreStat.files / stats.totalFiles) * 100).toFixed(
+      1,
     );
+    const pagesPercent = ((genreStat.pages / stats.totalPages) * 100).toFixed(
+      1,
+    );
+    const sentencesPercent = (
+      (genreStat.sentences / stats.totalSentences) *
+      100
+    ).toFixed(1);
+    const wordsPercent = ((genreStat.words / stats.totalWords) * 100).toFixed(
+      1,
+    );
+    const nerPercent =
+      stats.totalNerEntities > 0
+        ? ((genreStat.nerEntities / stats.totalNerEntities) * 100).toFixed(1)
+        : '0.0';
+    const avgWords =
+      genreStat.sentences > 0
+        ? (genreStat.words / genreStat.sentences).toFixed(2)
+        : '0.00';
+
+    console.log(`\nGenre: ${genre}`);
+    console.log('------------------------------');
+    console.log(`Files: ${genreStat.files} (${filesPercent}% of total)`);
+    console.log(`Pages: ${genreStat.pages} (${pagesPercent}% of total)`);
+    console.log(
+      `Sentences: ${genreStat.sentences} (${sentencesPercent}% of total)`,
+    );
+    console.log(`Words: ${genreStat.words} (${wordsPercent}% of total)`);
+    console.log(
+      `NER entities: ${genreStat.nerEntities} (${nerPercent}% of total)`,
+    );
+    console.log(`Avg words per sentence: ${avgWords}`);
+
+    // Show top NER labels for this genre
+    const sortedLabels = Object.entries(genreStat.nerLabelCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5);
+
+    if (sortedLabels.length > 0) {
+      console.log('  Top NER labels:');
+      // eslint-disable-next-line no-restricted-syntax
+      for (const [label, count] of sortedLabels) {
+        const labelPercent =
+          genreStat.nerEntities > 0
+            ? ((count / genreStat.nerEntities) * 100).toFixed(1)
+            : '0.0';
+        console.log(`    ${label}: ${count} (${labelPercent}%)`);
+      }
+    }
   }
 
-  console.log('\nBIBLE vs TOTAL PERCENTAGE');
-  console.log('-----------------------------');
-  console.log(
-    `Bible files: ${((stats.bibleFiles / stats.totalFiles) * 100).toFixed(1)}%`,
-  );
-  console.log(
-    `Bible pages: ${((stats.biblePages / stats.totalPages) * 100).toFixed(1)}%`,
-  );
-  console.log(
-    `Bible sentences: ${((stats.bibleSentences / stats.totalSentences) * 100).toFixed(1)}%`,
-  );
-  console.log(
-    `Bible words: ${((stats.bibleWords / stats.totalWords) * 100).toFixed(1)}%`,
-  );
-
-  console.log('\nNER ENTITY STATS');
-  console.log('--------------------');
-  console.log(`Total NER entities: ${stats.totalNerEntities}`);
-  console.log(`Bible NER entities: ${stats.bibleNerEntities}`);
-  if (stats.totalNerEntities > 0) {
-    console.log(
-      `Bible NER percentage: ${((stats.bibleNerEntities / stats.totalNerEntities) * 100).toFixed(1)}%`,
-    );
-  }
-
-  console.log('\nNER LABELS BREAKDOWN');
-  console.log('-------------------------');
+  console.log('\n\nOVERALL NER LABELS BREAKDOWN');
+  console.log('==============================');
   const sortedLabels = Object.entries(stats.nerLabelCounts).sort(
     ([, a], [, b]) => b - a,
   );
 
   // eslint-disable-next-line no-restricted-syntax
   for (const [label, count] of sortedLabels) {
-    const bibleCount = stats.bibleNerLabelCounts[label] || 0;
     const percentage =
       stats.totalNerEntities > 0
         ? ((count / stats.totalNerEntities) * 100).toFixed(1)
         : '0.0';
-    const biblePercentage =
-      count > 0 ? ((bibleCount / count) * 100).toFixed(1) : '0.0';
-    console.log(
-      `${label}: ${count} (${percentage}% of total, ${biblePercentage}% from Bible)`,
-    );
+    console.log(`${label}: ${count} (${percentage}% of total)`);
   }
 };
 
