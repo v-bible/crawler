@@ -1,5 +1,5 @@
 {
-  "name": "@v-bible/nlp",
+  "name": "@v-bible/crawler",
   "version": "0.0.0",
   "private": true,
   "scripts": {
