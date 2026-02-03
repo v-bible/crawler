@@ -176,6 +176,7 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
 
                   return {
                     type: 'single',
+                    languageCode: 'V',
                     text: removeAllFootnote(sentence).trim() as string,
                     // NOTE: Headings always belong to the first sentence
                     headings: idx === 0 ? verseHeadings : [],

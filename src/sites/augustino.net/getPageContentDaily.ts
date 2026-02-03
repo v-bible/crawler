@@ -94,6 +94,7 @@ const processGospel = async (locator: Locator) => {
 
       sentenceData.push({
         type: 'single',
+        languageCode: 'V',
         text: removeAllFootnote(content).trim(),
         extraAttributes: {
           number: verseOrderTrack.number,
@@ -175,6 +176,7 @@ const getPageContentDaily = (({ resourceHref, chapterParams }) => {
           .map((sentence) => {
             return {
               type: 'single',
+              languageCode: 'V',
               text: sentence.trim(),
             } satisfies Omit<
               SingleLanguageSentence,

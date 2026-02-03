@@ -188,6 +188,7 @@ const generateXmlTree: StringifyTreeFunction = (chapterTree) => {
                           {
                             ID: sentence.id,
                             TYPE: sentence.type,
+                            LANGUAGE_CODE: sentence.languageCode,
                             ...newExtraAttributes,
                           },
                           sentence.text,
@@ -366,6 +367,7 @@ const generateDataTree = ((
                   return {
                     id: sentence.id,
                     type: sentence.type,
+                    languageCode: sentence.languageCode,
                     extraAttributes: sentence.extraAttributes,
                     text: transformString(sentence.text, {
                       sentenceId: sentence.id,
@@ -461,7 +463,7 @@ const generateCsvTree: StringifyTreeFunction = (
   chapterTree.root.file.sect.pages.forEach((page) => {
     page.sentences.forEach((sentence) => {
       if (sentence.type === 'single') {
-        csvContent += `"${sentence.id}","", "${sentence.text.replace(
+        csvContent += `"${sentence.id}","${sentence.languageCode}", "${sentence.text.replace(
           /"/g,
           '""',
         )}"\n`;

@@ -4,6 +4,7 @@ import {
   filterNonChapterCheckpoint,
 } from '@/lib/crawler/crawler';
 import { getDefaultDocumentPath } from '@/lib/crawler/fileUtils';
+import { generateCsvTree } from '@/lib/crawler/treeUtils';
 import { getChapters } from '@/sites/rongmotamhon.net/getChapters';
 import { getMetadataList } from '@/sites/rongmotamhon.net/getMetadataList';
 import { getPageContent } from '@/sites/rongmotamhon.net/getPageContent';
@@ -20,6 +21,7 @@ export const crawler = new Crawler({
   getPageContentHandler: [
     {
       inputFn: getPageContent,
+      stringifyFn: generateCsvTree,
     },
     {
       inputFn: getPageContentVie,
@@ -28,6 +30,7 @@ export const crawler = new Crawler({
           ...params,
           suffix: 'vie',
         }),
+      stringifyFn: generateCsvTree,
     },
   ],
 });

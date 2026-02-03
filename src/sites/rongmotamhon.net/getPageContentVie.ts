@@ -69,6 +69,7 @@ const getPageContentVie = (({ resourceHref, chapterParams }) => {
 
             const sentence: SingleLanguageSentence = {
               type: 'single',
+              languageCode: 'V',
               id: sentenceId,
               text: line,
             };

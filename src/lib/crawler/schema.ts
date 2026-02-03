@@ -235,8 +235,13 @@ const BaseSentenceSchema = z.object({
     .optional(),
 });
 
+export const LanguageCodeSchema = z.enum(
+  languageCategories.map((lC) => lC.code),
+);
+
 export const SingleLanguageSentenceSchema = BaseSentenceSchema.extend({
   type: SentenceTypeSchema.extract(['single']),
+  languageCode: LanguageCodeSchema,
   text: z.string(),
   footnotes: SentenceFootnoteSchema.array().optional(),
 });
@@ -244,10 +249,6 @@ export const SingleLanguageSentenceSchema = BaseSentenceSchema.extend({
 export type SingleLanguageSentence = z.infer<
   typeof SingleLanguageSentenceSchema
 >;
-
-export const LanguageCodeSchema = z.enum(
-  languageCategories.map((lC) => lC.code),
-);
 
 export type LanguageCode = z.infer<typeof LanguageCodeSchema>;
 

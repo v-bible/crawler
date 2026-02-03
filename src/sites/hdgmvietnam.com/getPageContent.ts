@@ -211,6 +211,7 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
 
             return {
               type: 'single',
+              languageCode: 'V',
               text: removeAllFootnote(sentence).trim(),
               footnotes,
             } satisfies Omit<SingleLanguageSentence, 'id' | 'footnotes'> & {
