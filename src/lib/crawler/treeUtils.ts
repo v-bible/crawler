@@ -81,7 +81,10 @@ export type GenerateTreeFunction = (
   options?: GenerateTreeOptions,
 ) => ChapterTreeOutput;
 
-export type StringifyTreeFunction = (tree: ChapterTreeOutput) => {
+export type StringifyTreeFunction = (
+  tree: ChapterTreeOutput,
+  options?: Record<string, unknown>,
+) => {
   content: string;
   extension: string;
 };
@@ -185,6 +188,7 @@ const generateXmlTree: StringifyTreeFunction = (chapterTree) => {
                           {
                             ID: sentence.id,
                             TYPE: sentence.type,
+                            LANGUAGE_CODE: sentence.languageCode,
                             ...newExtraAttributes,
                           },
                           sentence.text,
@@ -363,6 +367,7 @@ const generateDataTree = ((
                   return {
                     id: sentence.id,
                     type: sentence.type,
+                    languageCode: sentence.languageCode,
                     extraAttributes: sentence.extraAttributes,
                     text: transformString(sentence.text, {
                       sentenceId: sentence.id,
@@ -439,6 +444,43 @@ const generateDataTreeWithAnnotation = (
   );
 };
 
+const generateCsvTree: StringifyTreeFunction = (
+  chapterTree,
+  options?: {
+    sentenceIdLabel?: string;
+    languageCodeLabel?: string;
+    textLabel?: string;
+  },
+) => {
+  const {
+    sentenceIdLabel = 'sentence_id',
+    languageCodeLabel = 'language_code',
+    textLabel = 'text',
+  } = options || {};
+
+  let csvContent = `"${sentenceIdLabel}","${languageCodeLabel}","${textLabel}"\n`;
+
+  chapterTree.root.file.sect.pages.forEach((page) => {
+    page.sentences.forEach((sentence) => {
+      if (sentence.type === 'single') {
+        csvContent += `"${sentence.id}","${sentence.languageCode}", "${sentence.text.replace(
+          /"/g,
+          '""',
+        )}"\n`;
+      } else {
+        sentence.array.forEach((lang) => {
+          csvContent += `"${sentence.id}","${lang.languageCode}", "${lang.text.replace(
+            /"/g,
+            '""',
+          )}"\n`;
+        });
+      }
+    });
+  });
+
+  return { content: csvContent.trim(), extension: 'csv' };
+};
+
 export {
   newLineIndent,
   generateIndent,
@@ -446,4 +488,5 @@ export {
   generateDataTreeWithAnnotation,
   generateXmlTree,
   generateJsonTree,
+  generateCsvTree,
 };

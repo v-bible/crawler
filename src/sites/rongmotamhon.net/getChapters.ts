@@ -1,4 +1,5 @@
 /* eslint-disable no-await-in-loop */
+import { PlaywrightBlocker } from '@ghostery/adblocker-playwright';
 import retry from 'async-retry';
 import { chromium, devices } from 'playwright';
 import Bluebird from '@/lib/bluebird';
@@ -16,10 +17,13 @@ const getChapters = (({ resourceHref }) => {
     const context = await browser.newContext(devices['Desktop Chrome']);
     const page = await context.newPage();
 
+    PlaywrightBlocker.fromPrebuiltAdsAndTracking(fetch).then((blocker) => {
+      blocker.enableBlockingInPage(page);
+    });
+
     try {
       // Set up cancellation handler after resources are created
       onCancel!(async () => {
-        await page.close();
         await context.close();
         await browser.close();
 
@@ -87,7 +91,6 @@ const getChapters = (({ resourceHref }) => {
       resolve(chapters);
     } catch (error) {
       // Clean up resources on error
-      await page.close();
       await context.close();
       await browser.close();
 

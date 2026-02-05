@@ -55,6 +55,9 @@ export const getMetadataList = async () => {
             return [];
           }
 
+          const title =
+            (await link.locator('strong').textContent())?.trim() || '';
+
           const metadata = {
             documentNumber: currentDocumentNumber,
             documentId: getDocumentId({
@@ -63,7 +66,7 @@ export const getMetadataList = async () => {
               subDomain: 'B',
               genre: 'Z',
             }),
-            title: (await link.locator('strong').textContent())?.trim() || '',
+            title,
             sourceType: 'web',
             sourceURL: href,
             language: 'Việt',
@@ -73,6 +76,8 @@ export const getMetadataList = async () => {
               vietnamese: 'Khác',
             },
             tags: [],
+            // NOTE: Set this to trigger chapter fetching
+            hasChapters: true,
           } satisfies MetadataInput;
 
           const parsedMetadata = MetadataSchema.safeParse(metadata);
@@ -85,6 +90,8 @@ export const getMetadataList = async () => {
             );
             return [];
           }
+
+          logger.info(`Fetched: ${title} - ${href}`);
 
           return [parsedMetadata.data];
         }),

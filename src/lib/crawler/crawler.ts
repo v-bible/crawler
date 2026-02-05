@@ -120,6 +120,10 @@ export type GetPageContentMdFunction<
   T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
 > = (params: GetPageContentParams<T>) => Bluebird<string>;
 
+export type GetPageExtraContentFunction<
+  T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
+> = (params: GetPageContentParams<T>) => Bluebird<void>;
+
 export type GetPageContentHandler = {
   metadataFilePath?: string;
   outputDir?: string;
@@ -127,6 +131,7 @@ export type GetPageContentHandler = {
   outputFn?: GenerateTreeFunction;
   stringifyFn?: StringifyTreeFunction | StringifyTreeFunction[];
   getFileName?: GetDefaultDocumentPathFunction;
+  extraContentFn?: GetPageExtraContentFunction | GetPageExtraContentFunction[];
 };
 
 class Crawler {
@@ -282,6 +287,9 @@ class Crawler {
         }
       }
 
+      // Track if all chapters processed successfully
+      let allChaptersSuccessful = true;
+
       // eslint-disable-next-line no-restricted-syntax
       for await (const { href, props } of chapterCrawlList) {
         const chapterParams = {
@@ -297,6 +305,8 @@ class Crawler {
         // eslint-disable-next-line no-restricted-syntax
         for await (const handler of handlerFn) {
           let stringifyFnArr: StringifyTreeFunction[];
+          let extraContentFnArr: GetPageExtraContentFunction[] = [];
+
           if (handler && handler.stringifyFn) {
             if (Array.isArray(handler.stringifyFn)) {
               stringifyFnArr = handler.stringifyFn.filter(
@@ -307,6 +317,16 @@ class Crawler {
             }
           } else {
             stringifyFnArr = defaultStringifyFunctions;
+          }
+
+          if (handler && handler.extraContentFn) {
+            if (Array.isArray(handler.extraContentFn)) {
+              extraContentFnArr = handler.extraContentFn.filter(
+                Boolean,
+              ) as GetPageExtraContentFunction[];
+            } else {
+              extraContentFnArr = [handler.extraContentFn];
+            }
           }
 
           const outputFn = handler.outputFn || generateDataTree;
@@ -331,6 +351,7 @@ class Crawler {
                 chapterParams,
               });
 
+              allChaptersSuccessful = false;
               // eslint-disable-next-line no-continue
               continue;
             }
@@ -379,7 +400,35 @@ class Crawler {
                 getFileName: handler.getFileName,
               });
             }
+
+            // eslint-disable-next-line no-restricted-syntax
+            for await (const extraFn of extraContentFnArr) {
+              try {
+                await withBluebirdTimeout(
+                  () =>
+                    extraFn({
+                      resourceHref: { href, props },
+                      chapterParams,
+                      metadata,
+                    }),
+                  this.timeout,
+                );
+              } catch (error) {
+                allChaptersSuccessful = false;
+                logger.error(
+                  `Error getting extra content for chapter ${props?.chapterNumber} of document ${metadata.documentId}:`,
+                  {
+                    href,
+                    error:
+                      error instanceof ZodError
+                        ? z.prettifyError(error)
+                        : error,
+                  },
+                );
+              }
+            }
           } catch (error) {
+            allChaptersSuccessful = false;
             logger.error(
               `Error processing data for chapter ${props?.chapterNumber} of document ${metadata.documentId}:`,
               {
@@ -411,6 +460,7 @@ class Crawler {
               documentTitle: metadata.title,
             });
           } catch (error) {
+            allChaptersSuccessful = false;
             logger.error(
               `Error getting MD content for chapter ${props?.chapterNumber} of document ${metadata.documentId}:`,
               {
@@ -421,7 +471,10 @@ class Crawler {
             );
           }
         }
+      }
 
+      // Only mark checkpoint complete if all chapters processed successfully
+      if (allChaptersSuccessful) {
         setCheckpointComplete(checkpoint.id, true);
       }
     }

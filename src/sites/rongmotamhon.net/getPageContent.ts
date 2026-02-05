@@ -16,14 +16,15 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
     const context = await browser.newContext(devices['Desktop Chrome']);
     const page = await context.newPage();
 
-    PlaywrightBlocker.fromPrebuiltAdsAndTracking(fetch).then((blocker) => {
-      blocker.enableBlockingInPage(page);
-    });
-
     try {
+      await PlaywrightBlocker.fromPrebuiltAdsAndTracking(fetch).then(
+        (blocker) => {
+          blocker.enableBlockingInPage(page);
+        },
+      );
+
       // Set up cancellation handler after resources are created
       onCancel!(async () => {
-        await page.close();
         await context.close();
         await browser.close();
 
@@ -74,6 +75,9 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
           };
         });
       });
+
+      await context.close();
+      await browser.close();
 
       // Process the scraped data to build sentences
       const sentences: MultiLanguageSentence[] = [];
@@ -129,7 +133,6 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
       ] satisfies Page[]);
     } catch (error) {
       // Clean up resources on error
-      await page.close();
       await context.close();
       await browser.close();
 

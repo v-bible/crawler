@@ -18,7 +18,7 @@ import {
 } from '@/lib/md/mdUtils';
 import { parseMd } from '@/lib/md/remark';
 
-const getPageContentMd = (({ resourceHref }) => {
+const getPageContentDailyMd = (({ resourceHref }) => {
   return new Bluebird.Promise(async (resolve, reject, onCancel) => {
     const { href } = resourceHref;
 
@@ -44,27 +44,7 @@ const getPageContentMd = (({ resourceHref }) => {
         },
       );
 
-      const bodyLocator = page.locator('div[id="fancybox-content"]');
-
-      await bodyLocator.evaluate((node) => {
-        // NOTE: Remove the footnote section if it exists
-        node.querySelector('h3[id="chu-thich"]')?.remove();
-
-        const allLinkEl = node.querySelectorAll('a');
-
-        for (const linkEl of allLinkEl) {
-          const fnId = linkEl.getAttribute('id');
-          const fnHref = linkEl.getAttribute('href');
-          const isFn = fnId?.startsWith('backtono');
-          const isFnRef = fnHref?.startsWith('#backtono');
-
-          if (isFn) {
-            linkEl.innerHTML = `[^${linkEl.innerHTML}]`;
-          } else if (isFnRef) {
-            linkEl.innerHTML = `[^${linkEl.innerHTML}:]`;
-          }
-        }
-      });
+      const bodyLocator = page.locator('div.reading-blocks');
 
       const bodyHtml = await bodyLocator.innerHTML();
 
@@ -73,11 +53,6 @@ const getPageContentMd = (({ resourceHref }) => {
 
       const md = await parseMd(bodyHtml);
 
-      // NOTE: Footnote may have format: "[\[3\]](#footnote-link)" or
-      // "[**\[3\]**](#footnote-link)" or "[3](#footnote-link)"
-      const fnRegex =
-        /\[[^\\[]*(\\\[)?(?<label>[^\\]*)(\\\])?[^\\\]]*\]\(([^)]*)\)/gm;
-
       const cleanupMd = cleanupMdProcessor(md, [
         removeMdImgs,
         (str) =>
@@ -85,18 +60,6 @@ const getPageContentMd = (({ resourceHref }) => {
             useLinkAsAlt: false,
           }),
         removeMdHr,
-        (str) => {
-          return str.replaceAll(fnRegex, (subStr, ...props) => {
-            // NOTE: Label is the first capturing group
-            const label = props[1];
-            // NOTE: We have inject "^" in the label above
-            // NOTE: The colon we injected above will be included in the label
-            if (label.includes(':')) {
-              return `[${label.replace(':', '')}]:`;
-            }
-            return `[${label}]`;
-          });
-        },
         // NOTE: Have to run first so the asterisk regex can match correctly
         normalizeWhitespace,
         normalizeAsterisk,
@@ -125,4 +88,4 @@ const getPageContentMd = (({ resourceHref }) => {
   });
 }) satisfies GetPageContentMdFunction;
 
-export { getPageContentMd };
+export { getPageContentDailyMd };
