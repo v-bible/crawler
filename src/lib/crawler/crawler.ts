@@ -282,6 +282,9 @@ class Crawler {
         }
       }
 
+      // Track if all chapters processed successfully
+      let allChaptersSuccessful = true;
+
       // eslint-disable-next-line no-restricted-syntax
       for await (const { href, props } of chapterCrawlList) {
         const chapterParams = {
@@ -331,6 +334,7 @@ class Crawler {
                 chapterParams,
               });
 
+              allChaptersSuccessful = false;
               // eslint-disable-next-line no-continue
               continue;
             }
@@ -380,6 +384,7 @@ class Crawler {
               });
             }
           } catch (error) {
+            allChaptersSuccessful = false;
             logger.error(
               `Error processing data for chapter ${props?.chapterNumber} of document ${metadata.documentId}:`,
               {
@@ -411,6 +416,7 @@ class Crawler {
               documentTitle: metadata.title,
             });
           } catch (error) {
+            allChaptersSuccessful = false;
             logger.error(
               `Error getting MD content for chapter ${props?.chapterNumber} of document ${metadata.documentId}:`,
               {
@@ -421,7 +427,10 @@ class Crawler {
             );
           }
         }
+      }
 
+      // Only mark checkpoint complete if all chapters processed successfully
+      if (allChaptersSuccessful) {
         setCheckpointComplete(checkpoint.id, true);
       }
     }
