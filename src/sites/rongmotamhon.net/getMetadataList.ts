@@ -76,6 +76,8 @@ export const getMetadataList = async () => {
               vietnamese: 'Khác',
             },
             tags: [],
+            // NOTE: Set this to trigger chapter fetching
+            hasChapters: true,
           } satisfies MetadataInput;
 
           const parsedMetadata = MetadataSchema.safeParse(metadata);

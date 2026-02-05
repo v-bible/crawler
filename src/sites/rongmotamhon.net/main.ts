@@ -1,7 +1,7 @@
 import {
   Crawler,
   defaultSortCheckpoint,
-  filterNonChapterCheckpoint,
+  filterChapterCheckpoint,
 } from '@/lib/crawler/crawler';
 import { getDefaultDocumentPath } from '@/lib/crawler/fileUtils';
 import { generateCsvTree } from '@/lib/crawler/treeUtils';
@@ -16,7 +16,7 @@ export const crawler = new Crawler({
   subDomain: 'B',
   getMetadataList,
   sortCheckpoint: defaultSortCheckpoint,
-  filterCheckpoint: filterNonChapterCheckpoint,
+  filterCheckpoint: filterChapterCheckpoint,
   getChapters,
   getPageContentHandler: [
     {
