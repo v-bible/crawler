@@ -45,6 +45,10 @@ const getPageContentVie = (({ resourceHref, chapterParams }) => {
 
       const bodyLocator = page.locator('[id="readme"]');
 
+      if (!(await bodyLocator.count())) {
+        resolve([]);
+      }
+
       await bodyLocator.evaluate((el) => {
         // NOTE: Remove first bold element which is the title
         el.querySelector('b')?.firstChild?.remove();
