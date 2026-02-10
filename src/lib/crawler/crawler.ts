@@ -164,6 +164,10 @@ class Crawler {
 
   sortSubtasks?: SortSubtasksFunction;
 
+  skipCheckpointCheck?: boolean;
+
+  skipSubtaskCheckpointCheck?: boolean;
+
   getChapters: GetChaptersFunction;
 
   getPageContentHandler: GetPageContentHandler | GetPageContentHandler[] = [];
@@ -184,6 +188,8 @@ class Crawler {
       sortCheckpoint?: SortCheckpointFunction;
       filterSubtasks?: FilterSubtasksFunction;
       sortSubtasks?: SortSubtasksFunction;
+      skipCheckpointCheck?: boolean;
+      skipSubtaskCheckpointCheck?: boolean;
       getChapters: GetChaptersFunction;
       getPageContentHandler: GetPageContentHandler | GetPageContentHandler[];
       getPageContentMd?: GetPageContentMdFunction;
@@ -205,6 +211,9 @@ class Crawler {
     this.sortCheckpoint = args.sortCheckpoint || defaultSortCheckpoint;
     this.filterSubtasks = args?.filterSubtasks || defaultFilterCheckpoint;
     this.sortSubtasks = args?.sortSubtasks;
+
+    this.skipCheckpointCheck = args.skipCheckpointCheck || true;
+    this.skipSubtaskCheckpointCheck = args.skipSubtaskCheckpointCheck || true;
 
     this.getChapters = args.getChapters;
     this.getPageContentHandler = args.getPageContentHandler || [];
@@ -303,6 +312,9 @@ class Crawler {
       sortCheckpoint: this.sortCheckpoint,
       filterSubtasks: this.filterSubtasks,
       sortSubtasks: this.sortSubtasks,
+
+      skipCheckpointCheck: this.skipCheckpointCheck,
+      skipSubtaskCheckpointCheck: this.skipSubtaskCheckpointCheck,
 
       filePath: this.checkpointFilePath,
       options: this.checkpointOptions,

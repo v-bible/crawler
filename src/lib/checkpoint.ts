@@ -34,6 +34,8 @@ export type WithCheckpointParams<
   getSubtaskId?: (parent: Checkpoint<T, K>, subtask: K) => string;
   filterSubtasks?: (data: Checkpoint<K, never>) => boolean;
   sortSubtasks?: (a: Checkpoint<K, never>, b: Checkpoint<K, never>) => number;
+  skipCheckpointCheck?: boolean;
+  skipSubtaskCheckpointCheck?: boolean;
   filePath?: string;
   options?: WithCheckpointOptions<T>;
 };
@@ -68,6 +70,8 @@ const withCheckpoint = async <
   getSubtaskId,
   filterSubtasks,
   sortSubtasks,
+  skipCheckpointCheck = false,
+  skipSubtaskCheckpointCheck = false,
   filePath = DEFAULT_CHECKPOINT_FILE_PATH,
   options,
 }: WithCheckpointParams<T, K>): Promise<WithCheckpointReturn<T, K>> => {
@@ -94,7 +98,7 @@ const withCheckpoint = async <
     K
   >[];
 
-  if (savedCheckpoint?.length === 0) {
+  if (!skipCheckpointCheck || savedCheckpoint?.length === 0) {
     // eslint-disable-next-line no-restricted-syntax
     for await (const item of await getInitialData()) {
       const checkpoint: Checkpoint<T, K> = {
@@ -114,7 +118,7 @@ const withCheckpoint = async <
     );
   }
 
-  if (getSubtaskData && getSubtaskId) {
+  if (!skipSubtaskCheckpointCheck && getSubtaskData && getSubtaskId) {
     const newCheckpoints: Checkpoint<T, K>[] = [];
 
     // eslint-disable-next-line no-restricted-syntax
