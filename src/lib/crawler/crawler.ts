@@ -37,8 +37,8 @@ import {
 import { logger } from '@/logger/logger';
 
 // Checkpoint utility functions
-export const defaultFilterCheckpoint = (
-  checkpoint: Checkpoint<Metadata>,
+export const defaultFilterCheckpoint = <T extends Record<string, unknown>>(
+  checkpoint: Checkpoint<T>,
 ): boolean => {
   return !checkpoint.completed;
 };
@@ -95,6 +95,13 @@ export type SortCheckpointFunction = (
   a: Checkpoint<Metadata>,
   b: Checkpoint<Metadata>,
 ) => number;
+export type FilterSubtasksFunction = (
+  checkpoint: Checkpoint<GetChaptersFunctionHref, never>,
+) => boolean;
+export type SortSubtasksFunction = (
+  a: Checkpoint<GetChaptersFunctionHref, never>,
+  b: Checkpoint<GetChaptersFunctionHref, never>,
+) => number;
 
 export type GetChaptersFunction<
   T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
@@ -149,9 +156,17 @@ class Crawler {
 
   filterMetadata?: FilterMetadataFunction;
 
-  filterCheckpoint?: FilterCheckpointFunction;
+  filterCheckpoint: FilterCheckpointFunction;
 
   sortCheckpoint?: SortCheckpointFunction;
+
+  filterSubtasks?: FilterSubtasksFunction;
+
+  sortSubtasks?: SortSubtasksFunction;
+
+  skipCheckpointCheck?: boolean;
+
+  skipSubtaskCheckpointCheck?: boolean;
 
   getChapters: GetChaptersFunction;
 
@@ -171,6 +186,10 @@ class Crawler {
       getMetadataBy?: FilterMetadataFunction;
       filterCheckpoint?: FilterCheckpointFunction;
       sortCheckpoint?: SortCheckpointFunction;
+      filterSubtasks?: FilterSubtasksFunction;
+      sortSubtasks?: SortSubtasksFunction;
+      skipCheckpointCheck?: boolean;
+      skipSubtaskCheckpointCheck?: boolean;
       getChapters: GetChaptersFunction;
       getPageContentHandler: GetPageContentHandler | GetPageContentHandler[];
       getPageContentMd?: GetPageContentMdFunction;
@@ -188,8 +207,13 @@ class Crawler {
 
     this.getMetadataList = args.getMetadataList;
     this.filterMetadata = args.getMetadataBy;
-    this.filterCheckpoint = args.filterCheckpoint;
-    this.sortCheckpoint = args.sortCheckpoint;
+    this.filterCheckpoint = args.filterCheckpoint || defaultFilterCheckpoint;
+    this.sortCheckpoint = args.sortCheckpoint || defaultSortCheckpoint;
+    this.filterSubtasks = args?.filterSubtasks || defaultFilterCheckpoint;
+    this.sortSubtasks = args?.sortSubtasks;
+
+    this.skipCheckpointCheck = args.skipCheckpointCheck || true;
+    this.skipSubtaskCheckpointCheck = args.skipSubtaskCheckpointCheck || true;
 
     this.getChapters = args.getChapters;
     this.getPageContentHandler = args.getPageContentHandler || [];
@@ -213,23 +237,88 @@ class Crawler {
 
   async run() {
     // NOTE: Get saved checkpoint
-    const { filteredCheckpoint: metadataCheckpoint, setCheckpointComplete } =
-      await withCheckpoint<Metadata>({
-        getInitialData: async () =>
-          (await this.getMetadataList()).filter(
-            (metadata) => this.filterMetadata?.(metadata) ?? true,
-          ),
-        getCheckpointId: (data) => data.documentId,
-        filterCheckpoint: (checkpoint) => {
-          return this.filterCheckpoint
-            ? this.filterCheckpoint(checkpoint)
-            : !checkpoint.completed;
-        },
-        sortCheckpoint: this.sortCheckpoint,
+    const {
+      filteredCheckpoint: metadataCheckpoint,
+      setCheckpointComplete,
+      setSubtaskComplete,
+    } = await withCheckpoint<Metadata, GetChaptersFunctionHref>({
+      getInitialData: async () =>
+        (await this.getMetadataList()).filter(
+          (metadata) => this.filterMetadata?.(metadata) ?? true,
+        ),
 
-        filePath: this.checkpointFilePath,
-        options: this.checkpointOptions,
-      });
+      getSubtaskData: async (checkpoint) => {
+        const parseRes = MetadataSchema.safeParse(checkpoint.params);
+
+        if (!parseRes.success) {
+          logger.error('Error parsing metadata checkpoint', {
+            id: checkpoint.id,
+            error: z.prettifyError(parseRes.error),
+          });
+
+          // eslint-disable-next-line no-continue
+          return [];
+        }
+
+        const metadata = parseRes.data;
+
+        const documentParams = {
+          ...this.domainParams,
+          genre: metadata.genre.code,
+          documentNumber: +metadata.documentNumber,
+        };
+
+        let chapterCrawlList: Awaited<ReturnType<GetChaptersFunction>> = [
+          {
+            href: metadata.sourceURL,
+            props: {
+              chapterNumber: 1,
+            },
+          },
+        ];
+
+        if (metadata.hasChapters) {
+          try {
+            chapterCrawlList = await withBluebirdTimeout(
+              () =>
+                this.getChapters({
+                  resourceHref: { href: metadata.sourceURL },
+                  documentParams,
+                  metadata,
+                }),
+              this.timeout,
+            );
+          } catch (error) {
+            logger.error(
+              `Error getting chapters for document ${metadata.documentId}:`,
+              {
+                href: metadata.sourceURL,
+                error:
+                  error instanceof ZodError ? z.prettifyError(error) : error,
+              },
+            );
+
+            // eslint-disable-next-line no-continue
+            return [];
+          }
+        }
+
+        return chapterCrawlList;
+      },
+      getSubtaskId: (checkpoint, subtaskData) => subtaskData.href,
+
+      getCheckpointId: (data) => data.documentId,
+      filterCheckpoint: this.filterCheckpoint,
+      sortCheckpoint: this.sortCheckpoint,
+      filterSubtasks: this.filterSubtasks,
+      sortSubtasks: this.sortSubtasks,
+
+      skipCheckpointCheck: this.skipCheckpointCheck,
+      skipSubtaskCheckpointCheck: this.skipSubtaskCheckpointCheck,
+
+      filePath: this.checkpointFilePath,
+      options: this.checkpointOptions,
+    });
 
     // eslint-disable-next-line no-restricted-syntax
     for await (const checkpoint of metadataCheckpoint) {
@@ -253,48 +342,18 @@ class Crawler {
         documentNumber: +metadata.documentNumber,
       };
 
-      let chapterCrawlList: Awaited<ReturnType<GetChaptersFunction>> = [
-        {
-          href: metadata.sourceURL,
-          props: {
-            chapterNumber: 1,
-          },
-        },
-      ];
-
-      if (metadata.hasChapters) {
-        try {
-          chapterCrawlList = await withBluebirdTimeout(
-            () =>
-              this.getChapters({
-                resourceHref: { href: metadata.sourceURL },
-                documentParams,
-                metadata,
-              }),
-            this.timeout,
-          );
-        } catch (error) {
-          logger.error(
-            `Error getting chapters for document ${metadata.documentId}:`,
-            {
-              href: metadata.sourceURL,
-              error: error instanceof ZodError ? z.prettifyError(error) : error,
-            },
-          );
-
-          // eslint-disable-next-line no-continue
-          continue;
-        }
-      }
-
       // Track if all chapters processed successfully
       let allChaptersSuccessful = true;
 
+      const subtasks = checkpoint?.subtasks || [];
+
       // eslint-disable-next-line no-restricted-syntax
-      for await (const { href, props } of chapterCrawlList) {
+      for await (const subtask of subtasks) {
+        const { href, props } = subtask.params;
+
         const chapterParams = {
           ...documentParams,
-          chapterNumber: props?.chapterNumber,
+          chapterNumber: props?.chapterNumber || 1,
           chapterName: props?.chapterName || '',
         };
 
@@ -471,6 +530,8 @@ class Crawler {
             );
           }
         }
+
+        setSubtaskComplete(checkpoint.id, subtask.id, true);
       }
 
       // Only mark checkpoint complete if all chapters processed successfully
