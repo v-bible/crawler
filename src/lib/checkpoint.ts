@@ -11,7 +11,7 @@ export type Checkpoint<
   id: string;
   completed: boolean;
   params: T;
-  subtasks?: Checkpoint<K, never>[];
+  subtasks?: Checkpoint<K, never>[] | null;
 };
 
 export type WithCheckpointOptions<T extends Record<string, unknown>> = {
@@ -105,7 +105,7 @@ const withCheckpoint = async <
         id: getCheckpointId(item),
         params: item,
         completed: false,
-        subtasks: [],
+        subtasks: null,
       };
 
       savedCheckpoint.push(checkpoint);
@@ -118,11 +118,17 @@ const withCheckpoint = async <
     );
   }
 
-  if (!skipSubtaskCheckpointCheck && getSubtaskData && getSubtaskId) {
+  if (getSubtaskData && getSubtaskId) {
     const newCheckpoints: Checkpoint<T, K>[] = [];
 
     // eslint-disable-next-line no-restricted-syntax
     for await (const checkpoint of savedCheckpoint) {
+      // NOTE: Skip get subtask data if already exists
+      if (skipSubtaskCheckpointCheck && checkpoint.subtasks !== null) {
+        // eslint-disable-next-line no-continue
+        continue;
+      }
+
       // Initialize subtasks if they don't exist
       const subtaskItems = await getSubtaskData(checkpoint);
 
@@ -166,7 +172,7 @@ const withCheckpoint = async <
   for await (const checkpoint of filteredCheckpoint) {
     let filteredSubtasks: Checkpoint<K>[] = [];
 
-    if (!checkpoint.subtasks || checkpoint.subtasks.length === 0) {
+    if (!checkpoint.subtasks || checkpoint.subtasks === null) {
       // eslint-disable-next-line no-continue
       continue;
     }
@@ -189,16 +195,21 @@ const withCheckpoint = async <
       return savedCheckpoint;
     },
     setCheckpointComplete: (checkpointId, completed) => {
-      const idx = savedCheckpoint.findIndex(
+      const currentData = readFileSync(filePath, 'utf-8');
+      const currentCheckpoint: Checkpoint<T, K>[] = JSON.parse(
+        currentData || '[]',
+      );
+
+      const idx = currentCheckpoint.findIndex(
         (checkpoint) => checkpointId === checkpoint.id,
       );
 
       if (idx !== -1) {
-        savedCheckpoint[idx]!.completed = completed;
+        currentCheckpoint[idx]!.completed = completed;
 
         writeFileSync(
           filePath,
-          JSON.stringify(savedCheckpoint, null, 2),
+          JSON.stringify(currentCheckpoint, null, 2),
           'utf-8',
         );
       } else {
@@ -208,26 +219,31 @@ const withCheckpoint = async <
       }
     },
     setSubtaskComplete: (parentId, subtaskId, completed) => {
-      const parentIdx = savedCheckpoint.findIndex(
+      const currentData = readFileSync(filePath, 'utf-8');
+      const currentCheckpoint: Checkpoint<T, K>[] = JSON.parse(
+        currentData || '[]',
+      );
+
+      const parentIdx = currentCheckpoint.findIndex(
         (checkpoint) => parentId === checkpoint.id,
       );
 
       if (parentIdx !== -1) {
-        const subtaskIdx = savedCheckpoint[parentIdx]!.subtasks?.findIndex(
+        const subtaskIdx = currentCheckpoint[parentIdx]!.subtasks?.findIndex(
           (subtask) => subtaskId === subtask.id,
         );
 
         if (
           subtaskIdx !== undefined &&
           subtaskIdx !== -1 &&
-          savedCheckpoint[parentIdx]!.subtasks
+          currentCheckpoint[parentIdx]!.subtasks
         ) {
-          savedCheckpoint[parentIdx]!.subtasks![subtaskIdx]!.completed =
+          currentCheckpoint[parentIdx]!.subtasks![subtaskIdx]!.completed =
             completed;
 
           writeFileSync(
             filePath,
-            JSON.stringify(savedCheckpoint, null, 2),
+            JSON.stringify(currentCheckpoint, null, 2),
             'utf-8',
           );
         } else {
