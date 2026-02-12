@@ -23,7 +23,7 @@ const getChapters = (({ resourceHref }) => {
       });
 
       await page.goto(href, {
-        timeout: 5 * 3600,
+        timeout: 5 * 36000,
         waitUntil: 'domcontentloaded',
       });
 
@@ -58,7 +58,7 @@ const getChapters = (({ resourceHref }) => {
         chapterLinks.push(...allLinks);
 
         await page.goto(nextBookLink, {
-          timeout: 5 * 3600,
+          timeout: 5 * 36000,
           waitUntil: 'domcontentloaded',
         });
       }
@@ -84,6 +84,7 @@ const getChapters = (({ resourceHref }) => {
 
       resolve(chapters);
     } catch (error) {
+      console.log('error', error);
       // Clean up resources on error
       await context.close();
       await browser.close();

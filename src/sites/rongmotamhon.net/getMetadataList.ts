@@ -24,7 +24,7 @@ export const getMetadataList = async () => {
     'https://www.rongmotamhon.net/kinh-bac-truyen_viet-van_lpks_0.html',
     {
       waitUntil: 'domcontentloaded',
-      timeout: 5 * 3600,
+      timeout: 5 * 36000,
     },
   );
 
@@ -110,7 +110,7 @@ export const getMetadataList = async () => {
 
       if (nextPageLink) {
         await page.goto(nextPageLink, {
-          timeout: 5 * 3600,
+          timeout: 5 * 36000,
           waitUntil: 'domcontentloaded',
         });
 
