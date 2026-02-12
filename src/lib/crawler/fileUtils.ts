@@ -71,6 +71,45 @@ const writeChapterContent = ({
   }
 };
 
+const writeChapterContentBuffer = ({
+  getFileName = getDefaultDocumentPath,
+  params,
+  baseDir,
+  content,
+  extension,
+  documentTitle,
+}: {
+  params: ChapterParams;
+  baseDir: string;
+  content: Buffer;
+  extension: string;
+  documentTitle?: string;
+  getFileName?: GetDefaultDocumentPathFunction;
+}) => {
+  // NOTE: We write to genre dir directly instead of
+  // baseDir/domain/subDomain/genre to reduce complexity
+  const fileName = `${baseDir}/${getFileName({
+    ...params,
+    documentTitle,
+    extension,
+  })}`;
+
+  const documentFolderPath = dirname(fileName);
+
+  try {
+    mkdirSync(documentFolderPath, { recursive: true });
+  } catch (error) {
+    logger.error(`Error creating folder ${documentFolderPath}:`, error);
+  }
+
+  try {
+    writeFileSync(fileName, content);
+    logger.info(`File written successfully: ${fileName}`);
+  } catch (error) {
+    logger.error(`Error writing file ${fileName}:`, error);
+  }
+};
+
 const readCsvFileStream = <T extends MetadataRowCSV>(
   filePath: string,
   options?: Partial<ParserOptionsArgs>,
@@ -104,6 +143,7 @@ const walkDirectoryByGenre = (
 export {
   getDefaultDocumentPath,
   writeChapterContent,
+  writeChapterContentBuffer,
   readCsvFileStream,
   walkDirectoryByGenre,
 };
