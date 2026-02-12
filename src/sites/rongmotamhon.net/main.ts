@@ -7,6 +7,7 @@ import { getChapters } from '@/sites/rongmotamhon.net/getChapters';
 import { getMetadataList } from '@/sites/rongmotamhon.net/getMetadataList';
 import { getPageContent } from '@/sites/rongmotamhon.net/getPageContent';
 import { getPageContentVie } from '@/sites/rongmotamhon.net/getPageContentVie';
+import { getPdf } from '@/sites/rongmotamhon.net/getPdf';
 
 export const crawler = new Crawler({
   name: 'rongmotamhon.net',
@@ -20,6 +21,7 @@ export const crawler = new Crawler({
     {
       inputFn: getPageContent,
       stringifyFn: generateCsvTree,
+      extraContentFn: [getPdf],
     },
     {
       inputFn: getPageContentVie,
