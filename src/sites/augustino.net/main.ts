@@ -1,10 +1,8 @@
 import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
-import {
-  Crawler,
-  defaultSortCheckpoint,
-  filterNonChapterCheckpoint,
-} from '@/lib/crawler/crawler';
+import { Crawler } from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
+import { filterNonChapterCheckpoint } from '@/lib/crawler/filterUtils';
+import { sortCheckpointAsc } from '@/lib/crawler/sortUtils';
 import { getChapters } from '@/sites/augustino.net/getChapters';
 import { getPageContent } from '@/sites/augustino.net/getPageContent';
 import { getPageContentMd } from '@/sites/augustino.net/getPageContentMd';
@@ -19,7 +17,7 @@ export const crawler = new Crawler({
       metadataRow.source === 'augustino.net' && metadataRow.sourceType === 'web'
     );
   },
-  sortCheckpoint: defaultSortCheckpoint,
+  sortCheckpoint: sortCheckpointAsc,
   filterCheckpoint: filterNonChapterCheckpoint,
   getChapters,
   getPageContentHandler: {

@@ -1,11 +1,9 @@
 import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
 import Bluebird from '@/lib/bluebird';
-import {
-  Crawler,
-  defaultSortCheckpoint,
-  filterNonChapterCheckpoint,
-} from '@/lib/crawler/crawler';
+import { Crawler } from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
+import { filterNonChapterCheckpoint } from '@/lib/crawler/filterUtils';
+import { sortCheckpointAsc } from '@/lib/crawler/sortUtils';
 import { getPageContent } from '@/sites/conggiao.org/getPageContent';
 import { getPageContentMd } from '@/sites/conggiao.org/getPageContentMd';
 
@@ -19,7 +17,7 @@ export const crawler = new Crawler({
       metadataRow.source === 'conggiao.org' && metadataRow.sourceType === 'web'
     );
   },
-  sortCheckpoint: defaultSortCheckpoint,
+  sortCheckpoint: sortCheckpointAsc,
   filterCheckpoint: filterNonChapterCheckpoint,
   getChapters: ({ resourceHref }) => {
     return new Bluebird.Promise((resolve) => {

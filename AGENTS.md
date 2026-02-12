@@ -516,6 +516,33 @@ Always provide clear error messages:
 - Avoid loading entire datasets into memory
 - Use async/await for I/O operations
 
+## Module Organization
+
+### Do NOT Re-export Utilities
+
+**Forbidden pattern:**
+
+```typescript
+// ❌ BAD - Do not re-export utilities from barrel files
+export { sortCheckpointAsc, sortCheckpointDesc } from './sortUtils';
+export { defaultFilterCheckpoint } from './filterUtils';
+```
+
+**Correct pattern:**
+
+```typescript
+// ✅ GOOD - Import utilities directly where needed
+import { sortCheckpointAsc } from '@/lib/crawler/sortUtils';
+import { defaultFilterCheckpoint } from '@/lib/crawler/filterUtils';
+```
+
+**Rationale:**
+
+- Each utility file should be imported directly where it's used
+- Avoids circular dependencies and import confusion
+- Makes dependencies explicit and traceable
+- Easier to understand what code depends on what
+
 ## Remember
 
 1. **Quality over speed** - Take time to do it right
@@ -523,3 +550,4 @@ Always provide clear error messages:
 3. **Document as you go** - Update README.md immediately
 4. **Keep it simple** - Don't create unnecessary files
 5. **Follow patterns** - Match existing code style
+6. **No re-exports** - Import utilities directly from their source files
