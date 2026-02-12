@@ -1,9 +1,7 @@
-import {
-  Crawler,
-  defaultSortCheckpoint,
-  filterChapterCheckpoint,
-} from '@/lib/crawler/crawler';
+import { Crawler } from '@/lib/crawler/crawler';
 import { getDefaultDocumentPath } from '@/lib/crawler/fileUtils';
+import { filterChapterCheckpoint } from '@/lib/crawler/filterUtils';
+import { sortCheckpointAsc } from '@/lib/crawler/sortUtils';
 import { generateCsvTree } from '@/lib/crawler/treeUtils';
 import { getChapters } from '@/sites/rongmotamhon.net/getChapters';
 import { getMetadataList } from '@/sites/rongmotamhon.net/getMetadataList';
@@ -15,7 +13,7 @@ export const crawler = new Crawler({
   domain: 'R',
   subDomain: 'B',
   getMetadataList,
-  sortCheckpoint: defaultSortCheckpoint,
+  sortCheckpoint: sortCheckpointAsc,
   filterCheckpoint: filterChapterCheckpoint,
   getChapters,
   getPageContentHandler: [

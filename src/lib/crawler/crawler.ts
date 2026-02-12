@@ -10,11 +10,12 @@ import {
   type Checkpoint,
   type WithCheckpointOptions,
   withCheckpoint,
-} from '@/lib/checkpoint';
+} from '@/lib/crawler/checkpoint';
 import {
   type GetDefaultDocumentPathFunction,
   writeChapterContent,
 } from '@/lib/crawler/fileUtils';
+import { defaultFilterCheckpoint } from '@/lib/crawler/filterUtils';
 import {
   type ChapterParams,
   type DocumentParams,
@@ -27,6 +28,7 @@ import {
   type SentenceHeading,
   type TreeFootnote,
 } from '@/lib/crawler/schema';
+import { sortCheckpointAsc } from '@/lib/crawler/sortUtils';
 import {
   type GenerateTreeFunction,
   type StringifyTreeFunction,
@@ -35,39 +37,6 @@ import {
   generateXmlTree,
 } from '@/lib/crawler/treeUtils';
 import { logger } from '@/logger/logger';
-
-// Checkpoint utility functions
-export const defaultFilterCheckpoint = <T extends Record<string, unknown>>(
-  checkpoint: Checkpoint<T>,
-): boolean => {
-  return !checkpoint.completed;
-};
-
-export const defaultSortCheckpoint = (
-  a: Checkpoint<Metadata>,
-  b: Checkpoint<Metadata>,
-): number => {
-  // Sort by requiresManualCheck (false first), then by document number
-  const manualCheckDiff =
-    Number(a.params.requiresManualCheck === true) -
-    Number(b.params.requiresManualCheck === true);
-
-  if (manualCheckDiff !== 0) return manualCheckDiff;
-
-  return Number(a.params.documentNumber) - Number(b.params.documentNumber);
-};
-
-export const filterNonChapterCheckpoint = (
-  checkpoint: Checkpoint<Metadata>,
-): boolean => {
-  return !checkpoint.completed && !checkpoint.params.hasChapters;
-};
-
-export const filterChapterCheckpoint = (
-  checkpoint: Checkpoint<Metadata>,
-): boolean => {
-  return !checkpoint.completed && checkpoint.params.hasChapters === true;
-};
 
 export const defaultStringifyFunctions: StringifyTreeFunction[] = [
   generateXmlTree,
@@ -208,7 +177,7 @@ class Crawler {
     this.getMetadataList = args.getMetadataList;
     this.filterMetadata = args.getMetadataBy;
     this.filterCheckpoint = args.filterCheckpoint || defaultFilterCheckpoint;
-    this.sortCheckpoint = args.sortCheckpoint || defaultSortCheckpoint;
+    this.sortCheckpoint = args.sortCheckpoint || sortCheckpointAsc;
     this.filterSubtasks = args?.filterSubtasks || defaultFilterCheckpoint;
     this.sortSubtasks = args?.sortSubtasks;
 

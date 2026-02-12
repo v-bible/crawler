@@ -1,7 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { writeFile } from 'fs/promises';
 import path from 'path';
+import * as lockfile from 'proper-lockfile';
 import { DEFAULT_CHECKPOINT_FILE_PATH } from '@/constants';
+import {
+  readCheckpointFile,
+  writeCheckpointFile,
+} from '@/lib/crawler/checkpointFileUtils';
 import { logger } from '@/logger/logger';
 
 export type Checkpoint<
@@ -91,12 +95,7 @@ const withCheckpoint = async <
     writeFileSync(filePath, '[]', 'utf-8');
   }
 
-  const checkpointFileData = readFileSync(filePath, 'utf-8');
-
-  const savedCheckpoint = JSON.parse(checkpointFileData || '[]') as Checkpoint<
-    T,
-    K
-  >[];
+  const savedCheckpoint = await readCheckpointFile<T, K>(filePath);
 
   if (!skipCheckpointCheck || savedCheckpoint?.length === 0) {
     // eslint-disable-next-line no-restricted-syntax
@@ -111,11 +110,7 @@ const withCheckpoint = async <
       savedCheckpoint.push(checkpoint);
     }
 
-    await writeFile(
-      filePath,
-      JSON.stringify(savedCheckpoint, null, 2),
-      'utf-8',
-    );
+    await writeCheckpointFile(filePath, savedCheckpoint);
   }
 
   if (getSubtaskData && getSubtaskId) {
@@ -145,7 +140,18 @@ const withCheckpoint = async <
       newCheckpoints.push(checkpoint);
     }
 
-    await writeFile(filePath, JSON.stringify(newCheckpoints, null, 2), 'utf-8');
+    // Re-read the entire checkpoint file with lock, update it, and write back
+    const allCheckpoints = await readCheckpointFile<T, K>(filePath);
+
+    // Update only the checkpoints that we processed
+    newCheckpoints.forEach((newCheckpoint) => {
+      const idx = allCheckpoints.findIndex((c) => c.id === newCheckpoint.id);
+      if (idx !== -1) {
+        allCheckpoints[idx] = newCheckpoint;
+      }
+    });
+
+    await writeCheckpointFile(filePath, allCheckpoints);
   }
 
   let filteredCheckpoint: Checkpoint<T, K>[] = [];
@@ -195,66 +201,88 @@ const withCheckpoint = async <
       return savedCheckpoint;
     },
     setCheckpointComplete: (checkpointId, completed) => {
-      const currentData = readFileSync(filePath, 'utf-8');
-      const currentCheckpoint: Checkpoint<T, K>[] = JSON.parse(
-        currentData || '[]',
-      );
+      // Atomic read-modify-write operation with lock held for entire duration
+      try {
+        lockfile.lockSync(filePath, { stale: 10000 });
 
-      const idx = currentCheckpoint.findIndex(
-        (checkpoint) => checkpointId === checkpoint.id,
-      );
+        try {
+          const checkpointFileData = readFileSync(filePath, 'utf-8');
+          const currentCheckpoint = JSON.parse(
+            checkpointFileData || '[]',
+          ) as Checkpoint<T, K>[];
 
-      if (idx !== -1) {
-        currentCheckpoint[idx]!.completed = completed;
+          const idx = currentCheckpoint.findIndex(
+            (checkpoint) => checkpointId === checkpoint.id,
+          );
 
-        writeFileSync(
-          filePath,
-          JSON.stringify(currentCheckpoint, null, 2),
-          'utf-8',
-        );
-      } else {
-        logger.error(
-          `Checkpoint with id ${checkpointId} not found in saved checkpoints.`,
-        );
+          if (idx !== -1) {
+            currentCheckpoint[idx]!.completed = completed;
+
+            writeFileSync(
+              filePath,
+              JSON.stringify(currentCheckpoint, null, 2),
+              'utf-8',
+            );
+          } else {
+            logger.error(
+              `Checkpoint with id ${checkpointId} not found in saved checkpoints.`,
+            );
+          }
+        } finally {
+          lockfile.unlockSync(filePath);
+        }
+      } catch (error) {
+        logger.error('Error in setCheckpointComplete:', error);
       }
     },
     setSubtaskComplete: (parentId, subtaskId, completed) => {
-      const currentData = readFileSync(filePath, 'utf-8');
-      const currentCheckpoint: Checkpoint<T, K>[] = JSON.parse(
-        currentData || '[]',
-      );
+      // Atomic read-modify-write operation with lock held for entire duration
+      try {
+        lockfile.lockSync(filePath, { stale: 10000 });
 
-      const parentIdx = currentCheckpoint.findIndex(
-        (checkpoint) => parentId === checkpoint.id,
-      );
+        try {
+          const checkpointFileData = readFileSync(filePath, 'utf-8');
+          const currentCheckpoint = JSON.parse(
+            checkpointFileData || '[]',
+          ) as Checkpoint<T, K>[];
 
-      if (parentIdx !== -1) {
-        const subtaskIdx = currentCheckpoint[parentIdx]!.subtasks?.findIndex(
-          (subtask) => subtaskId === subtask.id,
-        );
-
-        if (
-          subtaskIdx !== undefined &&
-          subtaskIdx !== -1 &&
-          currentCheckpoint[parentIdx]!.subtasks
-        ) {
-          currentCheckpoint[parentIdx]!.subtasks![subtaskIdx]!.completed =
-            completed;
-
-          writeFileSync(
-            filePath,
-            JSON.stringify(currentCheckpoint, null, 2),
-            'utf-8',
+          const parentIdx = currentCheckpoint.findIndex(
+            (checkpoint) => parentId === checkpoint.id,
           );
-        } else {
-          logger.error(
-            `Subtask with id ${subtaskId} not found in parent checkpoint ${parentId}.`,
-          );
+
+          if (parentIdx !== -1) {
+            const subtaskIdx = currentCheckpoint[
+              parentIdx
+            ]!.subtasks?.findIndex((subtask) => subtaskId === subtask.id);
+
+            if (
+              subtaskIdx !== undefined &&
+              subtaskIdx !== -1 &&
+              currentCheckpoint[parentIdx]!.subtasks
+            ) {
+              currentCheckpoint[parentIdx]!.subtasks![subtaskIdx]!.completed =
+                completed;
+
+              writeFileSync(
+                filePath,
+                JSON.stringify(currentCheckpoint, null, 2),
+                'utf-8',
+              );
+            } else {
+              logger.error(
+                `Subtask with id ${subtaskId} not found in parent checkpoint ${parentId}.`,
+              );
+            }
+          } else {
+            logger.error(
+              `Parent checkpoint with id ${parentId} not found in saved checkpoints.`,
+            );
+          }
+        } finally {
+          lockfile.unlockSync(filePath);
         }
-      } else {
-        logger.error(
-          `Parent checkpoint with id ${parentId} not found in saved checkpoints.`,
-        );
+      } catch (error) {
+        logger.error('Error in setSubtaskComplete:', error);
       }
     },
   };
