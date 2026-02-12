@@ -208,8 +208,8 @@ class Crawler {
     // NOTE: Get saved checkpoint
     const {
       filteredCheckpoint: metadataCheckpoint,
-      setCheckpointComplete,
       setSubtaskComplete,
+      setCheckpointComplete,
     } = await withCheckpoint<Metadata, GetChaptersFunctionHref>({
       getInitialData: async () =>
         (await this.getMetadataList()).filter(
@@ -311,13 +311,23 @@ class Crawler {
         documentNumber: +metadata.documentNumber,
       };
 
-      // Track if all chapters processed successfully
-      let allChaptersSuccessful = true;
-
       const subtasks = checkpoint?.subtasks || [];
+
+      const isAllSubtasksComplete = subtasks.every(
+        (subtask) => subtask.completed,
+      );
+
+      // If all subtasks are complete, mark checkpoint complete and skip
+      if (isAllSubtasksComplete) {
+        setCheckpointComplete(checkpoint.id, true);
+        // eslint-disable-next-line no-continue
+        continue;
+      }
 
       // eslint-disable-next-line no-restricted-syntax
       for await (const subtask of subtasks) {
+        // Track if this specific subtask processed successfully
+        let subtaskSuccessful = true;
         const { href, props } = subtask.params;
 
         const chapterParams = {
@@ -379,7 +389,7 @@ class Crawler {
                 chapterParams,
               });
 
-              allChaptersSuccessful = false;
+              subtaskSuccessful = false;
               // eslint-disable-next-line no-continue
               continue;
             }
@@ -442,7 +452,7 @@ class Crawler {
                   this.timeout,
                 );
               } catch (error) {
-                allChaptersSuccessful = false;
+                subtaskSuccessful = false;
                 logger.error(
                   `Error getting extra content for chapter ${props?.chapterNumber} of document ${metadata.documentId}:`,
                   {
@@ -456,7 +466,7 @@ class Crawler {
               }
             }
           } catch (error) {
-            allChaptersSuccessful = false;
+            subtaskSuccessful = false;
             logger.error(
               `Error processing data for chapter ${props?.chapterNumber} of document ${metadata.documentId}:`,
               {
@@ -488,7 +498,7 @@ class Crawler {
               documentTitle: metadata.title,
             });
           } catch (error) {
-            allChaptersSuccessful = false;
+            subtaskSuccessful = false;
             logger.error(
               `Error getting MD content for chapter ${props?.chapterNumber} of document ${metadata.documentId}:`,
               {
@@ -500,11 +510,18 @@ class Crawler {
           }
         }
 
-        setSubtaskComplete(checkpoint.id, subtask.id, true);
+        // Only mark subtask complete if it processed successfully
+        if (subtaskSuccessful) {
+          setSubtaskComplete(checkpoint.id, subtask.id, true);
+        }
       }
 
-      // Only mark checkpoint complete if all chapters processed successfully
-      if (allChaptersSuccessful) {
+      // After processing all subtasks, check if all are now complete
+      const allSubtasksNowComplete = subtasks.every(
+        (subtask) => subtask.completed,
+      );
+
+      if (allSubtasksNowComplete) {
         setCheckpointComplete(checkpoint.id, true);
       }
     }
