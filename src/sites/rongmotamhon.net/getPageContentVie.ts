@@ -35,7 +35,7 @@ const getPageContentVie = (({ resourceHref, chapterParams }) => {
         async () => {
           await page.goto(href, {
             waitUntil: 'domcontentloaded',
-            timeout: 5 * 3600,
+            timeout: 5 * 36000,
           });
         },
         {
@@ -89,6 +89,7 @@ const getPageContentVie = (({ resourceHref, chapterParams }) => {
         },
       ]);
     } catch (error) {
+      console.log('error', error);
       // Clean up resources on error
       await context.close();
       await browser.close();

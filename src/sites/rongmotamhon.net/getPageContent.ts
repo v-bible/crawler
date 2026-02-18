@@ -35,7 +35,7 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
         async () => {
           await page.goto(href, {
             waitUntil: 'domcontentloaded',
-            timeout: 5 * 3600,
+            timeout: 5 * 36000,
           });
         },
         {
@@ -51,7 +51,7 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
 
       await page.goto(chinesePageHref, {
         waitUntil: 'domcontentloaded',
-        timeout: 5 * 3600,
+        timeout: 5 * 36000,
       });
 
       // Bulk scrape all character data at once using page.evaluate
@@ -96,11 +96,11 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
             type: 'multiple',
             array: [
               {
-                languageCode: 'V',
+                languageCode: 'CV',
                 text: currentChineseVietnameseSentence.join(' ').trim(),
               },
               {
-                languageCode: 'CV',
+                languageCode: 'C',
                 text: currentChineseSentence.join(' ').trim(),
               },
             ],
@@ -132,6 +132,7 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
         },
       ] satisfies Page[]);
     } catch (error) {
+      console.log('error', error);
       // Clean up resources on error
       await context.close();
       await browser.close();

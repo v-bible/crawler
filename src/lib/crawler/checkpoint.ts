@@ -263,6 +263,15 @@ const withCheckpoint = async <
               currentCheckpoint[parentIdx]!.subtasks![subtaskIdx]!.completed =
                 completed;
 
+              // Check if all subtasks are completed, then mark parent as completed
+              const allSubtasksCompleted = currentCheckpoint[
+                parentIdx
+              ]!.subtasks!.every((subtask) => subtask.completed);
+
+              if (allSubtasksCompleted) {
+                currentCheckpoint[parentIdx]!.completed = true;
+              }
+
               writeFileSync(
                 filePath,
                 JSON.stringify(currentCheckpoint, null, 2),
