@@ -35,7 +35,9 @@ export const crawler = new Crawler({
   getPageContentHandler: {
     inputFn: getPageContent,
   },
-  getPageContentMd,
+  getPageContentMdHandler: {
+    inputFn: getPageContentMd,
+  },
 });
 
 const anotherCrawler = new Crawler({
@@ -64,7 +66,9 @@ const anotherCrawler = new Crawler({
   getPageContentHandler: {
     inputFn: getPageContent,
   },
-  getPageContentMd,
+  getPageContentMdHandler: {
+    inputFn: getPageContentMd,
+  },
 });
 
 const main = async () => {

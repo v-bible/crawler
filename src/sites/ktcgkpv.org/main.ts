@@ -21,18 +21,22 @@ export const crawler = new Crawler({
   getPageContentHandler: {
     inputFn: getPageContent,
   },
-  getPageContentMd: ({ resourceHref }) => {
-    return new Bluebird.Promise(async (resolve, reject) => {
-      if (!resourceHref.props?.mdHref) {
-        reject(new Error('MD href is not provided'));
-        return;
-      }
+  getPageContentMdHandler: [
+    {
+      inputFn: ({ resourceHref }) => {
+        return new Bluebird.Promise(async (resolve, reject) => {
+          if (!resourceHref.props?.mdHref) {
+            reject(new Error('MD href is not provided'));
+            return;
+          }
 
-      const md = await (await fetch(resourceHref.props.mdHref)).text();
+          const md = await (await fetch(resourceHref.props.mdHref)).text();
 
-      resolve(md);
-    });
-  },
+          resolve(md);
+        });
+      },
+    },
+  ],
 });
 
 const main = async () => {
