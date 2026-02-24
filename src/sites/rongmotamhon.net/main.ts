@@ -1,6 +1,10 @@
 import path from 'path';
 import { DEFAULT_CHECKPOINT_DIR } from '@/constants';
-import { Crawler } from '@/lib/crawler/crawler';
+import {
+  Crawler,
+  type GetPageContentHandler,
+  type GetPageContentMdHandler,
+} from '@/lib/crawler/crawler';
 import {
   type GetDefaultDocumentPathFunction,
   getDefaultDocumentPath,
@@ -15,6 +19,7 @@ import {
 import { getChapters } from '@/sites/rongmotamhon.net/getChapters';
 import { getMetadataList } from '@/sites/rongmotamhon.net/getMetadataList';
 import { getPageContent } from '@/sites/rongmotamhon.net/getPageContent';
+import { getPageContentMdVie } from '@/sites/rongmotamhon.net/getPageContentMdVie';
 import { getPageContentVie } from '@/sites/rongmotamhon.net/getPageContentVie';
 import { getPdf } from '@/sites/rongmotamhon.net/getPdf';
 
@@ -38,7 +43,18 @@ const getPageContentHandlers = [
       })) as GetDefaultDocumentPathFunction,
     stringifyFn: [generateCsvTree, generateXmlTree, generateJsonTree],
   },
-];
+] satisfies GetPageContentHandler[];
+
+const getPageContentMdHandlers = [
+  {
+    inputFn: getPageContentMdVie,
+    getFileName: ((params) =>
+      getDefaultDocumentPath({
+        ...params,
+        suffix: 'vie',
+      })) as GetDefaultDocumentPathFunction,
+  },
+] satisfies GetPageContentMdHandler[];
 
 export const crawler = new Crawler({
   name: 'rongmotamhon.net - Asc',
@@ -50,6 +66,7 @@ export const crawler = new Crawler({
   filterCheckpoint: filterChapterCheckpoint,
   getChapters,
   getPageContentHandler: getPageContentHandlers,
+  getPageContentMdHandler: getPageContentMdHandlers,
 });
 
 const crawler2 = new Crawler({
@@ -62,6 +79,7 @@ const crawler2 = new Crawler({
   filterCheckpoint: filterChapterCheckpoint,
   getChapters,
   getPageContentHandler: getPageContentHandlers,
+  getPageContentMdHandler: getPageContentMdHandlers,
 });
 
 const crawler3 = new Crawler({
@@ -83,6 +101,7 @@ const crawler3 = new Crawler({
   filterCheckpoint: filterChapterCheckpoint,
   getChapters,
   getPageContentHandler: getPageContentHandlers,
+  getPageContentMdHandler: getPageContentMdHandlers,
 });
 
 const main = async () => {
