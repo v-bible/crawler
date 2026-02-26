@@ -2,7 +2,6 @@
 import fs from 'fs';
 import path from 'path';
 import { DEFAULT_OUTPUT_FILE_DIR } from '@/constants';
-import { ChapterTreeSchema } from '@/lib/crawler/treeSchema';
 
 type NerLabelCounts = Record<string, number>;
 
@@ -35,53 +34,71 @@ interface AggregatedStats {
   genreStats: Record<string, GenreStats>;
 }
 
-const analyzeFile = (filePath: string, genre: string): FileStats => {
-  const raw = fs.readFileSync(filePath, 'utf-8');
-  const data = ChapterTreeSchema.parse(JSON.parse(raw));
-  const { pages, annotations } = data.root.file.sect;
+const analyzeFile = (filePath: string, genre: string): FileStats | null => {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const data = JSON.parse(raw);
 
-  let sentenceCount = 0;
-  let totalWords = 0;
-  let nerEntityCount = 0;
-  const nerLabelCounts: NerLabelCounts = {};
+    // Access the structure without strict schema validation
+    const { pages, annotations } = data.root.file.sect;
 
-  // Count sentences and words
-  // eslint-disable-next-line no-restricted-syntax
-  for (const page of pages) {
+    let sentenceCount = 0;
+    let totalWords = 0;
+    let nerEntityCount = 0;
+    const nerLabelCounts: NerLabelCounts = {};
+
+    // Count sentences and words
     // eslint-disable-next-line no-restricted-syntax
-    for (const sentence of page.sentences) {
-      sentenceCount += 1;
-
-      if (sentence.type === 'single') {
-        const wordCount = sentence.text.split(/\s+/).filter(Boolean).length;
-        totalWords += wordCount;
-      }
-    }
-  }
-
-  // Count NER entities and labels
-  if (annotations) {
-    // eslint-disable-next-line no-restricted-syntax
-    for (const annotation of annotations) {
-      nerEntityCount += 1;
-
-      // Count each label for this entity
+    for (const page of pages) {
       // eslint-disable-next-line no-restricted-syntax
-      for (const label of annotation.labels) {
-        nerLabelCounts[label] = (nerLabelCounts[label] || 0) + 1;
+      for (const sentence of page.sentences) {
+        sentenceCount += 1;
+
+        if (sentence.type === 'single') {
+          const wordCount = sentence.text.split(/\s+/).filter(Boolean).length;
+          totalWords += wordCount;
+        } else if (sentence.type === 'multiple') {
+          // Handle multi-language sentences
+          // eslint-disable-next-line no-restricted-syntax
+          for (const langSentence of sentence.array) {
+            const wordCount = langSentence.text
+              .split(/\s+/)
+              .filter(Boolean).length;
+            totalWords += wordCount;
+          }
+        }
       }
     }
-  }
 
-  return {
-    fileName: path.basename(filePath),
-    genre,
-    pageCount: pages.length,
-    sentenceCount,
-    totalWords,
-    nerEntityCount,
-    nerLabelCounts,
-  };
+    // Count NER entities and labels
+    if (annotations) {
+      // eslint-disable-next-line no-restricted-syntax
+      for (const annotation of annotations) {
+        nerEntityCount += 1;
+
+        // Count each label for this entity
+        // eslint-disable-next-line no-restricted-syntax
+        for (const label of annotation.labels) {
+          nerLabelCounts[label] = (nerLabelCounts[label] || 0) + 1;
+        }
+      }
+    }
+
+    return {
+      fileName: path.basename(filePath),
+      genre,
+      pageCount: pages.length,
+      sentenceCount,
+      totalWords,
+      nerEntityCount,
+      nerLabelCounts,
+    };
+  } catch (error) {
+    console.warn(
+      `⚠️  Skipping ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  }
 };
 
 const aggregateStats = (filesStats: FileStats[]): AggregatedStats => {
@@ -233,32 +250,52 @@ const printStats = (stats: AggregatedStats): void => {
 };
 
 const main = (): void => {
-  const folder = DEFAULT_OUTPUT_FILE_DIR; // or your folder path
+  const folder = DEFAULT_OUTPUT_FILE_DIR;
 
-  const files = fs
-    .readdirSync(folder)
-    .map((genreFolder) =>
-      fs
-        .readdirSync(path.join(folder, genreFolder))
-        .flatMap((documentFolder) =>
-          path.join(folder, genreFolder, documentFolder),
-        )
-        .flatMap((documentFolder) =>
-          fs
-            .readdirSync(documentFolder)
-            .filter((file) => file.endsWith('.json'))
-            .map((file) => ({
-              filePath: path.join(documentFolder, file),
-              genre: genreFolder,
-            })),
-        ),
-    )
-    .flat();
-
-  const statsPerFile = files.map(({ filePath, genre }) => {
-    console.log(`Processing: ${filePath}`);
-    return analyzeFile(filePath, genre);
+  // Read genre folders (A, C, D, etc.)
+  const genreFolders = fs.readdirSync(folder).filter((name) => {
+    const fullPath = path.join(folder, name);
+    return fs.statSync(fullPath).isDirectory();
   });
+
+  // Collect all JSON files with their genre
+  const files: Array<{ filePath: string; genre: string }> = [];
+
+  // eslint-disable-next-line no-restricted-syntax
+  for (const genreFolder of genreFolders) {
+    const genrePath = path.join(folder, genreFolder);
+
+    // Read document folders within each genre
+    const documentFolders = fs.readdirSync(genrePath).filter((name) => {
+      const fullPath = path.join(genrePath, name);
+      return fs.statSync(fullPath).isDirectory();
+    });
+
+    // eslint-disable-next-line no-restricted-syntax
+    for (const documentFolder of documentFolders) {
+      const documentPath = path.join(genrePath, documentFolder);
+
+      // Read JSON files within each document folder
+      const jsonFiles = fs
+        .readdirSync(documentPath)
+        .filter((file) => file.endsWith('.json'));
+
+      // eslint-disable-next-line no-restricted-syntax
+      for (const jsonFile of jsonFiles) {
+        files.push({
+          filePath: path.join(documentPath, jsonFile),
+          genre: genreFolder,
+        });
+      }
+    }
+  }
+
+  const statsPerFile = files
+    .map(({ filePath, genre }) => {
+      console.log(`Processing: ${filePath}`);
+      return analyzeFile(filePath, genre);
+    })
+    .filter((stat): stat is FileStats => stat !== null);
 
   const aggregated = aggregateStats(statsPerFile);
   printStats(aggregated);
