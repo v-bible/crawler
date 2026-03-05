@@ -23,12 +23,23 @@ type OrphanedChapter = {
   missingFiles: string[];
 };
 
+type EmptyFile = {
+  documentId: string;
+  chapterNumber: number;
+  file: string;
+  size: number;
+};
+
 type DuplicateFolder = {
   documentId: string;
   folders: string[];
   checkpointTitle: string;
   matchingFolder: string | null;
   nonMatchingFolders: string[];
+};
+
+type FileTypeCounts = {
+  [extension: string]: number;
 };
 
 type CheckpointParams = {
@@ -131,6 +142,87 @@ const findDuplicateFolders = (): DuplicateFolder[] => {
   }
 
   return duplicates;
+};
+
+const getFileType = (filename: string): string => {
+  // Check for Vietnamese CSV files
+  if (filename.endsWith('_vie.csv')) {
+    return '_vie.csv';
+  }
+
+  // Check for specific PDF files
+  if (filename.endsWith('_can-long.pdf')) {
+    return '_can-long.pdf';
+  }
+  if (filename.endsWith('_vinh-lac.pdf')) {
+    return '_vinh-lac.pdf';
+  }
+
+  // Check for Chinese CSV files (ends with .csv but not _vie.csv)
+  if (filename.endsWith('.csv')) {
+    return '.csv (Chinese)';
+  }
+
+  // Default to extension
+  return path.extname(filename);
+};
+
+const countFileTypes = (): {
+  existing: FileTypeCounts;
+  missing: FileTypeCounts;
+} => {
+  const existing: FileTypeCounts = {};
+  const missing: FileTypeCounts = {};
+
+  if (!fs.existsSync(CORPUS_PATH)) {
+    return { existing, missing };
+  }
+
+  // Get all RBZ folders
+  const folders = fs.readdirSync(CORPUS_PATH).filter((name) => {
+    const fullPath = path.join(CORPUS_PATH, name);
+    return fs.statSync(fullPath).isDirectory() && name.startsWith('RBZ_');
+  });
+
+  // Count existing files
+  // eslint-disable-next-line no-restricted-syntax
+  for (const folder of folders) {
+    const folderPath = path.join(CORPUS_PATH, folder);
+    const files = fs.readdirSync(folderPath);
+
+    // eslint-disable-next-line no-restricted-syntax
+    for (const file of files) {
+      const fileType = getFileType(file);
+      if (fileType) {
+        existing[fileType] = (existing[fileType] || 0) + 1;
+      }
+    }
+  }
+
+  return { existing, missing };
+};
+
+const countMissingFileTypes = (missingFiles: MissingFile[]): FileTypeCounts => {
+  const counts: FileTypeCounts = {};
+
+  // eslint-disable-next-line no-restricted-syntax
+  for (const item of missingFiles) {
+    // eslint-disable-next-line no-restricted-syntax
+    for (const file of item.missingFiles) {
+      // Skip orphan markers and "ALL FILES MISSING" messages
+      if (file.startsWith('[ORPHAN]') || file.includes('ALL FILES MISSING')) {
+        // eslint-disable-next-line no-continue
+        continue;
+      }
+
+      const fileType = getFileType(file);
+      if (fileType) {
+        counts[fileType] = (counts[fileType] || 0) + 1;
+      }
+    }
+  }
+
+  return counts;
 };
 
 const findMissingFiles = (): MissingFile[] => {
@@ -276,6 +368,72 @@ const findMissingFiles = (): MissingFile[] => {
   }
 
   return missingFiles;
+};
+
+const findEmptyVieCsvFiles = (): EmptyFile[] => {
+  const emptyFiles: EmptyFile[] = [];
+
+  if (!fs.existsSync(CORPUS_PATH)) {
+    console.warn(`WARNING: Corpus path does not exist: ${CORPUS_PATH}`);
+    return emptyFiles;
+  }
+
+  // Get all RBZ folders
+  const folders = fs
+    .readdirSync(CORPUS_PATH)
+    .filter((name) => {
+      const fullPath = path.join(CORPUS_PATH, name);
+      return fs.statSync(fullPath).isDirectory() && name.startsWith('RBZ_');
+    })
+    .sort();
+
+  // Check each folder for empty _vie.csv files
+  // eslint-disable-next-line no-restricted-syntax
+  for (const folder of folders) {
+    const folderPath = path.join(CORPUS_PATH, folder);
+    const documentId = folder.split(' ')[0];
+
+    if (documentId) {
+      const files = fs.readdirSync(folderPath);
+
+      // Check all _vie.csv files
+      // eslint-disable-next-line no-restricted-syntax
+      for (const file of files) {
+        if (file.endsWith('_vie.csv')) {
+          const filePath = path.join(folderPath, file);
+          const stats = fs.statSync(filePath);
+
+          // Check if file is 0 bytes or only has headers (no data rows)
+          let isEmpty = false;
+
+          if (stats.size === 0) {
+            isEmpty = true;
+          } else {
+            // Read file and check if it has data rows
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const lines = content.trim().split('\n');
+            // File is empty if it has only 1 line (header) or no lines
+            isEmpty = lines.length <= 1;
+          }
+
+          if (isEmpty) {
+            // Extract chapter number from filename
+            const match = file.match(/^RBZ_\d+\.(\d+)_vie\.csv$/);
+            if (match?.[1]) {
+              emptyFiles.push({
+                documentId,
+                chapterNumber: Number.parseInt(match[1], 10),
+                file,
+                size: stats.size,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return emptyFiles;
 };
 
 const updateCheckpoint = (
@@ -425,89 +583,157 @@ const main = (): void => {
   }
 
   console.log('No duplicate folders found.\n');
+  console.log('Counting file types...\n');
+
+  const { existing } = countFileTypes();
+
+  if (Object.keys(existing).length > 0) {
+    console.log('Existing files by type:');
+    const sortedExisting = Object.entries(existing).sort((a, b) => b[1] - a[1]);
+    // eslint-disable-next-line no-restricted-syntax
+    for (const [ext, count] of sortedExisting) {
+      console.log(`  ${ext}: ${count}`);
+    }
+    console.log(
+      `  Total: ${Object.values(existing).reduce((sum, count) => sum + count, 0)} files\n`,
+    );
+  } else {
+    console.log('No files found in corpus.\n');
+  }
+
   console.log('Scanning for missing files...\n');
 
   const missingFiles = findMissingFiles();
 
-  if (missingFiles.length === 0) {
-    console.log('All files are present! No missing files found.');
-    return;
-  }
-
   console.log(`\nFound ${missingFiles.length} chapters with missing files:\n`);
 
-  // Group by document
-  const byDocument = new Map<string, MissingFile[]>();
-  // eslint-disable-next-line no-restricted-syntax
-  for (const item of missingFiles) {
-    if (!byDocument.has(item.documentId)) {
-      byDocument.set(item.documentId, []);
-    }
-    byDocument.get(item.documentId)?.push(item);
-  }
+  // Count missing file types
+  const missingCounts = countMissingFileTypes(missingFiles);
 
-  // Print grouped by document
-  // eslint-disable-next-line no-restricted-syntax
-  for (const [documentId, items] of byDocument) {
-    console.log(`\n${documentId}:`);
+  if (Object.keys(missingCounts).length > 0) {
+    console.log('Missing files by type:');
+    const sortedMissing = Object.entries(missingCounts).sort(
+      (a, b) => b[1] - a[1],
+    );
     // eslint-disable-next-line no-restricted-syntax
-    for (const item of items) {
-      console.log(
-        `  Chapter ${item.chapterNumber}: ${item.missingFiles.join(', ')}`,
-      );
+    for (const [ext, count] of sortedMissing) {
+      console.log(`  ${ext}: ${count}`);
     }
-  }
-
-  console.log('\nUpdating checkpoint...');
-  const { updated, alreadyIncomplete, orphanedChapters, total } =
-    updateCheckpoint(missingFiles);
-
-  if (updated > 0) {
-    console.log(`\nMarked ${updated} subtasks as incomplete for re-crawling`);
-  }
-  if (alreadyIncomplete > 0) {
     console.log(
-      `${alreadyIncomplete} subtasks were already marked as incomplete`,
+      `  Total: ${Object.values(missingCounts).reduce((sum, count) => sum + count, 0)} missing files\n`,
     );
   }
-  if (orphanedChapters.length > 0) {
-    console.log(
-      `\n${orphanedChapters.length} chapters not found in checkpoint (orphaned files or outside normal workflow):\n`,
-    );
 
-    // Group orphaned chapters by document
-    const orphansByDocument = new Map<string, OrphanedChapter[]>();
+  if (missingFiles.length > 0) {
+    // Group by document
+    const byDocument = new Map<string, MissingFile[]>();
     // eslint-disable-next-line no-restricted-syntax
-    for (const orphan of orphanedChapters) {
-      if (!orphansByDocument.has(orphan.documentId)) {
-        orphansByDocument.set(orphan.documentId, []);
+    for (const item of missingFiles) {
+      if (!byDocument.has(item.documentId)) {
+        byDocument.set(item.documentId, []);
       }
-      orphansByDocument.get(orphan.documentId)?.push(orphan);
+      byDocument.get(item.documentId)?.push(item);
     }
 
-    // Print orphaned chapters grouped by document
+    // Print grouped by document
     // eslint-disable-next-line no-restricted-syntax
-    for (const [documentId, orphans] of orphansByDocument) {
-      console.log(`  ${documentId}:`);
+    for (const [documentId, items] of byDocument) {
+      console.log(`\n${documentId}:`);
       // eslint-disable-next-line no-restricted-syntax
-      for (const orphan of orphans) {
+      for (const item of items) {
         console.log(
-          `    Chapter ${orphan.chapterNumber}: ${orphan.missingFiles.join(', ')}`,
+          `  Chapter ${item.chapterNumber}: ${item.missingFiles.join(', ')}`,
         );
       }
     }
   }
 
-  console.log(`\nTotal tasks in checkpoint: ${total}`);
+  // Check for empty _vie.csv files
+  console.log('\nChecking for empty _vie.csv files...\n');
+  const emptyVieCsvFiles = findEmptyVieCsvFiles();
 
-  if (updated > 0) {
-    console.log('Re-run the crawler to fetch missing files');
-  } else if (orphanedChapters.length > 0 && alreadyIncomplete === 0) {
-    console.log(
-      'The missing files are not in the checkpoint - they may be orphaned files or test data',
-    );
+  if (emptyVieCsvFiles.length > 0) {
+    console.log(`Found ${emptyVieCsvFiles.length} empty _vie.csv files:\n`);
+
+    // Group empty files by document
+    const emptyByDocument = new Map<string, EmptyFile[]>();
+    // eslint-disable-next-line no-restricted-syntax
+    for (const item of emptyVieCsvFiles) {
+      if (!emptyByDocument.has(item.documentId)) {
+        emptyByDocument.set(item.documentId, []);
+      }
+      emptyByDocument.get(item.documentId)?.push(item);
+    }
+
+    // Print grouped by document
+    // eslint-disable-next-line no-restricted-syntax
+    for (const [documentId, items] of emptyByDocument) {
+      console.log(`${documentId}:`);
+      // eslint-disable-next-line no-restricted-syntax
+      for (const item of items) {
+        console.log(`  Chapter ${item.chapterNumber}: ${item.file}`);
+      }
+    }
+    console.log();
   } else {
-    console.log('Checkpoint is up to date');
+    console.log('No empty _vie.csv files found.\n');
+  }
+
+  // Only update checkpoint if there are missing files
+  if (missingFiles.length > 0) {
+    console.log('\nUpdating checkpoint...');
+    const { updated, alreadyIncomplete, orphanedChapters, total } =
+      updateCheckpoint(missingFiles);
+
+    if (updated > 0) {
+      console.log(`\nMarked ${updated} subtasks as incomplete for re-crawling`);
+    }
+    if (alreadyIncomplete > 0) {
+      console.log(
+        `${alreadyIncomplete} subtasks were already marked as incomplete`,
+      );
+    }
+    if (orphanedChapters.length > 0) {
+      console.log(
+        `\n${orphanedChapters.length} chapters not found in checkpoint (orphaned files or outside normal workflow):\n`,
+      );
+
+      // Group orphaned chapters by document
+      const orphansByDocument = new Map<string, OrphanedChapter[]>();
+      // eslint-disable-next-line no-restricted-syntax
+      for (const orphan of orphanedChapters) {
+        if (!orphansByDocument.has(orphan.documentId)) {
+          orphansByDocument.set(orphan.documentId, []);
+        }
+        orphansByDocument.get(orphan.documentId)?.push(orphan);
+      }
+
+      // Print orphaned chapters grouped by document
+      // eslint-disable-next-line no-restricted-syntax
+      for (const [documentId, orphans] of orphansByDocument) {
+        console.log(`  ${documentId}:`);
+        // eslint-disable-next-line no-restricted-syntax
+        for (const orphan of orphans) {
+          console.log(
+            `    Chapter ${orphan.chapterNumber}: ${orphan.missingFiles.join(', ')}`,
+          );
+        }
+      }
+    }
+
+    console.log(`\nTotal tasks in checkpoint: ${total}`);
+
+    if (updated > 0) {
+      console.log('Re-run the crawler to fetch missing files');
+    } else if (orphanedChapters.length > 0 && alreadyIncomplete === 0) {
+      console.log(
+        'The missing files are not in the checkpoint - they may be orphaned files or test data',
+      );
+    } else {
+      console.log('Checkpoint is up to date');
+    }
+  } else {
+    console.log('\nNo missing files to update in checkpoint.');
   }
 };
 
