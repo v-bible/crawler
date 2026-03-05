@@ -4,11 +4,22 @@ import { PlaywrightBlocker } from '@ghostery/adblocker-playwright';
 import retry from 'async-retry';
 import { chromium, devices } from 'playwright';
 import Bluebird from '@/lib/bluebird';
-import { type GetPageContentFunction } from '@/lib/crawler/crawler';
-import { getPageId, getSentenceId } from '@/lib/crawler/getId';
-import { type SingleLanguageSentence } from '@/lib/crawler/schema';
+import { type GetPageContentMdFunction } from '@/lib/crawler/crawler';
+import {
+  cleanupMdProcessor,
+  normalizeAsterisk,
+  normalizeMd,
+  normalizeNumberBullet,
+  normalizeQuotes,
+  normalizeWhitespace,
+  removeMdHr,
+  removeMdImgs,
+  removeMdLinks,
+  removeRedundantSpaces,
+} from '@/lib/md/mdUtils';
+import { parseMd } from '@/lib/md/remark';
 
-const getPageContentVie = (({ resourceHref, chapterParams }) => {
+const getPageContentMdVie = (({ resourceHref }) => {
   return new Bluebird.Promise(async (resolve, reject, onCancel) => {
     const { href } = resourceHref;
 
@@ -46,7 +57,7 @@ const getPageContentVie = (({ resourceHref, chapterParams }) => {
       const bodyLocator = page.locator('[id="readme"]');
 
       if (!(await bodyLocator.count())) {
-        resolve([]);
+        resolve('');
       }
 
       await bodyLocator.evaluate((el) => {
@@ -54,40 +65,30 @@ const getPageContentVie = (({ resourceHref, chapterParams }) => {
         el.querySelector('b')?.firstChild?.remove();
       });
 
-      const bodyContent = await bodyLocator.textContent();
+      const bodyHtml = await bodyLocator.innerHTML();
 
       await context.close();
       await browser.close();
 
-      const sentences =
-        bodyContent
-          ?.split('\n')
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0)
-          .map((line, index) => {
-            const sentenceId = getSentenceId({
-              ...chapterParams,
-              pageNumber: 1,
-              sentenceNumber: index + 1,
-            });
+      const md = await parseMd(bodyHtml);
 
-            const sentence: SingleLanguageSentence = {
-              type: 'single',
-              languageCode: 'V',
-              id: sentenceId,
-              text: line,
-            };
-
-            return sentence;
-          }) || [];
-
-      resolve([
-        {
-          id: getPageId({ ...chapterParams, pageNumber: 1 }),
-          number: 1,
-          sentences,
-        },
+      const cleanupMd = cleanupMdProcessor(md, [
+        removeMdImgs,
+        (str) =>
+          removeMdLinks(str, {
+            useLinkAsAlt: false,
+          }),
+        removeMdHr,
+        // NOTE: Have to run first so the asterisk regex can match correctly
+        normalizeWhitespace,
+        normalizeAsterisk,
+        normalizeQuotes,
+        normalizeNumberBullet,
+        normalizeMd,
+        removeRedundantSpaces,
       ]);
+
+      resolve(cleanupMd.trim());
     } catch (error) {
       // Clean up resources on error
       await context.close();
@@ -96,6 +97,6 @@ const getPageContentVie = (({ resourceHref, chapterParams }) => {
       reject(error);
     }
   });
-}) satisfies GetPageContentFunction;
+}) satisfies GetPageContentMdFunction;
 
-export { getPageContentVie };
+export { getPageContentMdVie };

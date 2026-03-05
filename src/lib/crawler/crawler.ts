@@ -101,13 +101,18 @@ export type GetPageExtraContentFunction<
 > = (params: GetPageContentParams<T>) => Bluebird<void>;
 
 export type GetPageContentHandler = {
-  metadataFilePath?: string;
   outputDir?: string;
   inputFn: GetPageContentFunction;
   outputFn?: GenerateTreeFunction;
   stringifyFn?: StringifyTreeFunction | StringifyTreeFunction[];
   getFileName?: GetDefaultDocumentPathFunction;
   extraContentFn?: GetPageExtraContentFunction | GetPageExtraContentFunction[];
+};
+
+export type GetPageContentMdHandler = {
+  outputDir?: string;
+  inputFn: GetPageContentMdFunction;
+  getFileName?: GetDefaultDocumentPathFunction;
 };
 
 class Crawler {
@@ -142,7 +147,7 @@ class Crawler {
   getPageContentHandler: GetPageContentHandler | GetPageContentHandler[] = [];
 
   // NOTE: Optional function to get page content in Markdown format
-  getPageContentMd?: GetPageContentMdFunction;
+  getPageContentMdHandler?: GetPageContentMdHandler | GetPageContentMdHandler[];
 
   checkpointOptions: WithCheckpointOptions<Metadata>;
 
@@ -161,7 +166,9 @@ class Crawler {
       skipSubtaskCheckpointCheck?: boolean;
       getChapters: GetChaptersFunction;
       getPageContentHandler: GetPageContentHandler | GetPageContentHandler[];
-      getPageContentMd?: GetPageContentMdFunction;
+      getPageContentMdHandler?:
+        | GetPageContentMdHandler
+        | GetPageContentMdHandler[];
       checkpointFilePath?: string;
       outputFileDir?: string;
       checkpointOptions?: WithCheckpointOptions<Metadata>;
@@ -186,7 +193,7 @@ class Crawler {
 
     this.getChapters = args.getChapters;
     this.getPageContentHandler = args.getPageContentHandler || [];
-    this.getPageContentMd = args.getPageContentMd;
+    this.getPageContentMdHandler = args.getPageContentMdHandler;
 
     if (!args.checkpointFilePath) {
       args.checkpointFilePath = path.join(
@@ -431,7 +438,7 @@ class Crawler {
 
               writeChapterContent({
                 params: chapterParams,
-                baseDir: this.outputFileDir,
+                baseDir: handler.outputDir || this.outputFileDir,
                 content,
                 extension,
                 documentTitle: metadata.title,
@@ -478,25 +485,36 @@ class Crawler {
           }
         }
 
-        if (this.getPageContentMd) {
-          try {
-            const mdContent = await withBluebirdTimeout(
-              () =>
-                this.getPageContentMd!({
-                  resourceHref: { href, props },
-                  chapterParams,
-                  metadata,
-                }),
-              this.timeout,
-            );
+        if (this.getPageContentMdHandler) {
+          const getPageContentMdHandler = Array.isArray(
+            this.getPageContentMdHandler,
+          )
+            ? this.getPageContentMdHandler
+            : [this.getPageContentMdHandler];
 
-            writeChapterContent({
-              params: chapterParams,
-              baseDir: this.outputFileDir,
-              content: mdContent,
-              extension: 'md',
-              documentTitle: metadata.title,
-            });
+          try {
+            // eslint-disable-next-line no-restricted-syntax
+            for await (const getPageContentMdHandlerFn of getPageContentMdHandler) {
+              const mdContent = await withBluebirdTimeout(
+                () =>
+                  getPageContentMdHandlerFn.inputFn({
+                    resourceHref: { href, props },
+                    chapterParams,
+                    metadata,
+                  }),
+                this.timeout,
+              );
+
+              writeChapterContent({
+                params: chapterParams,
+                baseDir:
+                  getPageContentMdHandlerFn.outputDir || this.outputFileDir,
+                content: mdContent,
+                extension: 'md',
+                documentTitle: metadata.title,
+                getFileName: getPageContentMdHandlerFn.getFileName,
+              });
+            }
           } catch (error) {
             subtaskSuccessful = false;
             logger.error(
