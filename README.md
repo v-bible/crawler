@@ -443,7 +443,7 @@ and is updated periodically.
 
 Please use [Label Studio](https://labelstud.io/) to label the NER data. Please
 refer to the
-[v-bible/crawler-label-studio](https://github.com/v-bible/crawler-label-studio) for
+[v-bible/nlp-label-studio](https://github.com/v-bible/nlp-label-studio) for
 setuping Label Studio.
 
 #### Getting API Token
@@ -553,7 +553,7 @@ The label procedure is as follows:
 3.  Label NER tasks:
     - Use Label Studio to label the NER tasks. The labeling interface is
       configured in the project settings, which is described in the
-      [v-bible/crawler-label-studio](https://github.com/v-bible/crawler-label-studio)
+      [v-bible/nlp-label-studio](https://github.com/v-bible/nlp-label-studio)
       repository.
 
 4.  Export NER labels:
