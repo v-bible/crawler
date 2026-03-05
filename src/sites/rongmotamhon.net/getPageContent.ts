@@ -64,12 +64,31 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
             link.getAttribute('title')?.trim() || '';
           const span = link.querySelector('span');
           const chineseCharacter = span?.textContent?.trim() || '';
-          const nextSibling = link.nextElementSibling;
-          const isEndOfSentence = !nextSibling?.getAttribute('href');
+
+          // Get all text between this link and the next link
+          let { nextSibling } = link;
+          let punctuation = '';
+
+          // Collect all text from text nodes until we hit another element
+          while (nextSibling && nextSibling.nodeType === Node.TEXT_NODE) {
+            const text = nextSibling.textContent || '';
+            // Remove only whitespace, keep all other characters (punctuation, brackets, etc.)
+            const trimmedText = text.replace(/\s+/g, '');
+            if (trimmedText) {
+              punctuation += trimmedText;
+            }
+            // eslint-disable-next-line prefer-destructuring
+            nextSibling = nextSibling.nextSibling;
+          }
+
+          // Check if the next element is not a link (end of sentence)
+          const { nextElementSibling } = link;
+          const isEndOfSentence = !nextElementSibling?.getAttribute('href');
 
           return {
             chineseVietnameseCharacter,
             chineseCharacter,
+            punctuation,
             isEndOfSentence,
             index,
           };
@@ -91,17 +110,27 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
         );
         currentChineseSentence.push(characterData.chineseCharacter);
 
+        // Add punctuation if present (same for both languages since it's 1-1 translation)
+        if (characterData.punctuation) {
+          currentChineseVietnameseSentence.push(characterData.punctuation);
+          currentChineseSentence.push(characterData.punctuation);
+        }
+
         if (characterData.isEndOfSentence) {
           sentences.push({
             type: 'multiple',
             array: [
               {
                 languageCode: 'CV',
-                text: currentChineseVietnameseSentence.join(' ').trim(),
+                // Chinese-Vietnamese needs spaces between syllables, but not before punctuation
+                text: currentChineseVietnameseSentence
+                  .join(' ')
+                  .replace(/\s+([,;.!?:，。；！？：、《》「」])/g, '$1'),
               },
               {
                 languageCode: 'C',
-                text: currentChineseSentence.join(' ').trim(),
+                // Chinese has no spaces between characters
+                text: currentChineseSentence.join(''),
               },
             ],
             id: getSentenceId({
@@ -132,7 +161,6 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
         },
       ] satisfies Page[]);
     } catch (error) {
-      console.log('error', error);
       // Clean up resources on error
       await context.close();
       await browser.close();
