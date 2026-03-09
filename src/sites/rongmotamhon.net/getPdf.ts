@@ -8,11 +8,12 @@ import {
   getDefaultDocumentPath,
   writeChapterContentBuffer,
 } from '@/lib/crawler/fileUtils';
-import { logger } from '@/logger/logger';
+import { getLogContext, logError, logInfo } from '@/lib/crawler/logUtils';
 
 const getPdf = (({ resourceHref, chapterParams, metadata }) => {
   return new Bluebird.Promise(async (resolve, reject, onCancel) => {
     const { href } = resourceHref;
+    const logContext = getLogContext(chapterParams, metadata, href);
 
     const browser = await chromium.launch();
     const context = await browser.newContext(devices['Desktop Chrome']);
@@ -114,7 +115,7 @@ const getPdf = (({ resourceHref, chapterParams, metadata }) => {
             suffix,
           });
 
-          logger.info(`Writing ${suffix} PDF to: ${filePath}`);
+          logInfo(`Writing ${suffix} PDF to: ${filePath}`, logContext);
 
           writeChapterContentBuffer({
             params: chapterParams,
@@ -125,8 +126,11 @@ const getPdf = (({ resourceHref, chapterParams, metadata }) => {
             getFileName: () => filePath,
           });
         } catch (error) {
-          logger.error(`Failed to load PDF page for link ${pdfHref}: ${error}`);
-          await pdfPage.close();
+          logError(
+            `Failed to load PDF page for link ${pdfHref}`,
+            logContext,
+            error as Error,
+          );
           // Only close page if it's still open
           if (!pdfPage.isClosed()) {
             await pdfPage.close();

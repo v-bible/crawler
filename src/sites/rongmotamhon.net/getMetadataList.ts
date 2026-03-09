@@ -3,12 +3,12 @@ import { PlaywrightBlocker } from '@ghostery/adblocker-playwright';
 import { chromium, devices } from 'playwright';
 import z from 'zod';
 import { getDocumentId } from '@/lib/crawler/getId';
+import { type LogContext, logError, logInfo } from '@/lib/crawler/logUtils';
 import {
   type MetadataInput,
   MetadataOutput,
   MetadataSchema,
 } from '@/lib/crawler/schema';
-import { logger } from '@/logger/logger';
 
 export const getMetadataList = async () => {
   const browser = await chromium.launch();
@@ -83,15 +83,32 @@ export const getMetadataList = async () => {
           const parsedMetadata = MetadataSchema.safeParse(metadata);
 
           if (!parsedMetadata.success) {
-            logger.error(
+            const errorContext: LogContext = {
+              documentId: metadata.documentId,
+              resourceHref: href,
+              metadata: {
+                title: metadata.title,
+                source: 'rongmotamhon.net',
+              },
+            };
+            logError(
               `Invalid metadata parsed from rongmotamhon.net: ${JSON.stringify(metadata)}. Errors: ${z.treeifyError(
                 parsedMetadata.error,
               )}`,
+              errorContext,
             );
             return [];
           }
 
-          logger.info(`Fetched: ${title} - ${href}`);
+          const infoContext: LogContext = {
+            documentId: parsedMetadata.data.documentId,
+            resourceHref: href,
+            metadata: {
+              title,
+              source: 'rongmotamhon.net',
+            },
+          };
+          logInfo(`Fetched: ${title} - ${href}`, infoContext);
 
           return [parsedMetadata.data];
         }),
