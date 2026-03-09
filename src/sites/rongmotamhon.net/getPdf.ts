@@ -90,15 +90,21 @@ const getPdf = (({ resourceHref, chapterParams, metadata }) => {
 
           // NOTE: Monitor the network requests to find the actual PDF file URL
 
-          const pdfRequest = await pdfPage.waitForRequest((request) =>
-            request.url().endsWith('.pdf'),
+          const pdfRequest = await pdfPage.waitForRequest(
+            (request) => request.url().endsWith('.pdf'),
+            {
+              timeout: 5 * 36000,
+            },
           );
 
           const pdfUrl = pdfRequest.url();
 
-          // Download the PDF file content as a buffer
-          const pdfResponse = await pdfPage.request.get(pdfUrl);
-          const pdfBuffer = await pdfResponse.body();
+          // Close the page since we have the PDF URL
+          await pdfPage.close();
+
+          // Download the PDF file content directly using fetch
+          const pdfResponse = await fetch(pdfUrl);
+          const pdfBuffer = Buffer.from(await pdfResponse.arrayBuffer());
 
           // Save the PDF buffer to a file
           const filePath = getDefaultDocumentPath({
@@ -121,6 +127,10 @@ const getPdf = (({ resourceHref, chapterParams, metadata }) => {
         } catch (error) {
           logger.error(`Failed to load PDF page for link ${pdfHref}: ${error}`);
           await pdfPage.close();
+          // Only close page if it's still open
+          if (!pdfPage.isClosed()) {
+            await pdfPage.close();
+          }
           // eslint-disable-next-line no-continue
           continue;
         }
