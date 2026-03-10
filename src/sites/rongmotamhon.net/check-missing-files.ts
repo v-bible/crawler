@@ -566,7 +566,7 @@ const main = (): void => {
 
       if (!duplicate.matchingFolder) {
         console.log(
-          '  ⚠ WARNING: None of the folders match the checkpoint title!',
+          '  WARNING: None of the folders match the checkpoint title!',
         );
       }
 
