@@ -5,6 +5,7 @@ import { type Page, chromium, devices } from 'playwright';
 import Bluebird from '@/lib/bluebird';
 import { type GetPageContentFunction } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
+import { getLogContext, logWarn } from '@/lib/crawler/logUtils';
 import {
   type Footnote,
   type SingleLanguageSentence,
@@ -27,7 +28,6 @@ import {
 } from '@/lib/md/mdUtils';
 import { parseMd } from '@/lib/md/remark';
 import { winkNLPInstance } from '@/lib/wink-nlp';
-import { logger } from '@/logger/logger';
 
 const extractFootnoteRef = async (
   page: Page,
@@ -206,10 +206,15 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
                 (fnText) => fnText.label === fnPos.label,
               );
               if (!footnoteRef) {
-                logger.warn('Footnote text not found for label', {
-                  href: resourceHref.href,
-                  label: fnPos.label,
-                });
+                const logContext = getLogContext(
+                  chapterParams,
+                  undefined,
+                  resourceHref.href,
+                );
+                logWarn(
+                  `Footnote text not found for label: ${fnPos.label}`,
+                  logContext,
+                );
 
                 return [];
               }

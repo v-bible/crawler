@@ -2,7 +2,7 @@ import retry from 'async-retry';
 import { chromium, devices } from 'playwright';
 import Bluebird from '@/lib/bluebird';
 import { type GetChaptersFunction } from '@/lib/crawler/crawler';
-import { logger } from '@/logger/logger';
+import { type LogContext, logWarn } from '@/lib/crawler/logUtils';
 
 const getChapters = (({ resourceHref }) => {
   return new Bluebird.Promise(async (resolve, reject, onCancel) => {
@@ -40,9 +40,10 @@ const getChapters = (({ resourceHref }) => {
             const text = (await linkEl.textContent()) || '';
 
             if (!chapterHref) {
-              logger.warn('Chapter link is missing', {
-                href,
-              });
+              const warnContext: LogContext = {
+                resourceHref: href,
+              };
+              logWarn('Chapter link is missing', warnContext);
 
               return [];
             }
