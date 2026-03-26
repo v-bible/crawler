@@ -13,75 +13,45 @@ const fetchHtmlContent = async (url: string) => {
   let group = 0;
   let content = '';
 
-  const html = await retry(
-    async () => {
-      const response = await fetch(url);
-      if (!response.ok) {
-        const errorContext: LogContext = {
-          resourceHref: url,
-        };
-        logError('Failed to fetch content', errorContext);
-        throw new Error(`Failed to fetch content, status: ${response.status}`);
-      }
-      return response.text();
-    },
-    {
-      retries: 5,
-    },
-  );
-
-  const resourceUrl = html.match(
-    /includes\/autoload_process2\.php\?p_id=\d+&cut=\d+/gm,
-  )?.[0];
-
-  if (!resourceUrl) {
-    const errorContext: LogContext = {
-      resourceHref: url,
-    };
-    logError('Resource URL not found in HTML', errorContext);
-    throw new Error('Resource URL not found in HTML');
-  }
-
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    try {
-      // eslint-disable-next-line no-await-in-loop
-      const response = await fetch(`https://rongmotamhon.net/${resourceUrl}`, {
-        headers: {
-          referer: encodeURIComponent(url),
-        },
-        body: new URLSearchParams({
-          group_no: group.toString(),
-        }),
-        method: 'POST',
-      });
-      if (!response.ok) {
-        const errorContext: LogContext = {
-          resourceHref: url,
-        };
-        logError('Failed to fetch content', errorContext);
-      }
-      // eslint-disable-next-line no-await-in-loop
-      const newContent = await response.text();
-      if (!newContent || newContent.trim() === '') {
-        break;
-      }
+    // eslint-disable-next-line no-await-in-loop
+    const newContent = await retry(
+      // eslint-disable-next-line no-loop-func
+      async () => {
+        // eslint-disable-next-line no-await-in-loop
+        const response = await fetch(url, {
+          headers: {
+            referer: encodeURIComponent(url),
+          },
+          body: new URLSearchParams({
+            group_no: group.toString(),
+          }),
+          method: 'POST',
+        });
 
-      content += newContent;
+        const res = await response.text();
 
-      // NOTE: Time gap between requests to avoid overwhelming the server
-      // eslint-disable-next-line no-await-in-loop, no-promise-executor-return
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    } catch (error) {
-      const errorContext: LogContext = {
-        resourceHref: url,
-      };
-      logError('Error fetching content', errorContext, error as Error);
-
+        if (!response.ok) {
+          throw new Error(`Failed to fetch content for group ${group}`);
+        }
+        return res;
+      },
+      {
+        retries: 5,
+      },
+    );
+    if (!newContent || newContent.trim() === '') {
       break;
     }
 
+    content += newContent;
+
     group += 1;
+  }
+
+  if (content.trim() === '') {
+    throw new Error('Fetched content is empty');
   }
 
   return content;
@@ -136,7 +106,43 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
         throw new Error('Chinese page link not found');
       }
 
-      const htmlBody = await fetchHtmlContent(chinesePageLink);
+      let htmlBody = '';
+
+      try {
+        await retry(
+          async () => {
+            await page.goto(chinesePageLink, {
+              waitUntil: 'domcontentloaded',
+              timeout: 5 * 36000,
+            });
+          },
+          {
+            retries: 5,
+          },
+        );
+
+        // NOTE: Get resource URL to pass to fetchHtmlContent to avoid issues with
+        // referer when fetching from node
+        const resourceRequest = await page.waitForRequest((request) =>
+          request.url().includes('includes/autoload_process2.php'),
+        );
+
+        const resourceUrl = resourceRequest.url();
+
+        if (!resourceUrl) {
+          const errorContext: LogContext = {
+            resourceHref: href,
+          };
+          logError('Resource URL not found from page requests', errorContext);
+          throw new Error('Resource URL not found from page requests');
+        }
+
+        htmlBody = await fetchHtmlContent(resourceUrl);
+      } catch (error) {
+        const errorContext: LogContext = chapterParams;
+        logError('Failed to fetch HTML content', errorContext, error);
+        throw error;
+      }
 
       const baseHtmlBody = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${htmlBody}</body></html>`;
 
@@ -148,7 +154,7 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
       const charactersData = await page.evaluate(() => {
         const links = Array.from(document.querySelectorAll('a'));
         return links
-          .map((link, index) => {
+          .map((link, index, array) => {
             let chineseVietnameseCharacter =
               link.getAttribute('data-am')?.trim() || '';
             const span = link.querySelector('span');
@@ -177,8 +183,8 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
             }
 
             // Check if the next element is br
-            const { nextElementSibling } = link;
-            const isEndOfSentence = nextElementSibling?.nodeName === 'BR';
+            const isEndOfSentence =
+              nextSibling?.nodeName === 'BR' || index === array.length - 1;
 
             return {
               chineseVietnameseCharacter: chineseVietnameseCharacter.trim(),
@@ -271,17 +277,3 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
 }) satisfies GetPageContentFunction;
 
 export { getPageContent };
-
-getPageContent({
-  resourceHref: {
-    href: 'https://rongmotamhon.net/xem-kinh_kinh-bat-tu-thu-y_cgmdlcg_viet1.html',
-  },
-  chapterParams: {
-    domain: 'R',
-    subDomain: 'B',
-    genre: 'Z',
-    documentNumber: 1,
-    chapterNumber: 1,
-    chapterName: 'Chương 1-2',
-  },
-});
