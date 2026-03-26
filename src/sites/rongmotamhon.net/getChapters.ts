@@ -3,7 +3,7 @@ import { uniqBy } from 'es-toolkit';
 import { chromium, devices } from 'playwright';
 import Bluebird from '@/lib/bluebird';
 import { type GetChaptersFunction } from '@/lib/crawler/crawler';
-import { logger } from '@/logger/logger';
+import { type LogContext, logError, logInfo } from '@/lib/crawler/logUtils';
 
 const getChapters = (({ resourceHref }) => {
   return new Bluebird.Promise(async (resolve, reject, onCancel) => {
@@ -77,14 +77,24 @@ const getChapters = (({ resourceHref }) => {
           },
         }));
 
-      logger.info(`Fetched ${chapters.length} chapters from rongmotamhon.net`, {
-        bookHref: href,
-        chapterHref: href,
-      });
+      const chaptersContext: LogContext = {
+        resourceHref: href,
+      };
+      logInfo(
+        `Fetched ${chapters.length} chapters from rongmotamhon.net`,
+        chaptersContext,
+      );
 
       resolve(chapters);
     } catch (error) {
-      console.log('error', error);
+      const errorContext: LogContext = {
+        resourceHref: href,
+      };
+      logError(
+        'Failed to fetch chapters from rongmotamhon.net',
+        errorContext,
+        error as Error,
+      );
       // Clean up resources on error
       await context.close();
       await browser.close();

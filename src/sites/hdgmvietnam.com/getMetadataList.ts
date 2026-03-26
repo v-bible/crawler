@@ -4,8 +4,8 @@ import { format } from 'date-fns';
 import { uniqBy } from 'es-toolkit';
 import z from 'zod';
 import { getDocumentId } from '@/lib/crawler/getId';
+import { type LogContext, logError, logInfo } from '@/lib/crawler/logUtils';
 import { MetadataInput, MetadataSchema } from '@/lib/crawler/schema';
-import { logger } from '@/logger/logger';
 
 const postTagSection = [
   'loi-chua-hang-ngay',
@@ -99,17 +99,34 @@ export const getMetadataList = async () => {
         const parsedMetadata = MetadataSchema.safeParse(metadata);
 
         if (!parsedMetadata.success) {
-          logger.error(
+          const errorContext: LogContext = {
+            documentId: metadata.documentId,
+            resourceHref: href,
+            metadata: {
+              title: metadata.title,
+              source: 'hdgmvietnam.com',
+            },
+          };
+          logError(
             `Invalid metadata parsed: ${JSON.stringify(
               metadata,
             )}. Errors: ${z.treeifyError(parsedMetadata.error)}`,
+            errorContext,
           );
 
           // eslint-disable-next-line no-continue
           continue;
         }
 
-        logger.info(`Fetched: ${title} - ${href}`);
+        const infoContext: LogContext = {
+          documentId: parsedMetadata.data.documentId,
+          resourceHref: href,
+          metadata: {
+            title,
+            source: 'hdgmvietnam.com',
+          },
+        };
+        logInfo(`Fetched: ${title} - ${href}`, infoContext);
 
         currentDocumentNumber += 1;
 

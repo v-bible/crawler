@@ -2,6 +2,7 @@ import { groupBy } from 'es-toolkit';
 import Bluebird from '@/lib/bluebird';
 import { type GetPageContentFunction } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
+import { getLogContext, logWarn } from '@/lib/crawler/logUtils';
 import {
   type Footnote,
   type Heading,
@@ -24,7 +25,6 @@ import {
   stripSymbols,
 } from '@/lib/md/mdUtils';
 import { winkNLPInstance } from '@/lib/wink-nlp';
-import { logger } from '@/logger/logger';
 
 const getPageContent = (({ resourceHref, chapterParams }) => {
   return new Bluebird.Promise(async (resolve) => {
@@ -158,10 +158,15 @@ const getPageContent = (({ resourceHref, chapterParams }) => {
                     }
 
                     if (!verseFootnote) {
-                      logger.warn('Footnote text not found for label', {
-                        href: resourceHref.href,
-                        label: fn.label,
-                      });
+                      const logContext = getLogContext(
+                        chapterParams,
+                        undefined,
+                        resourceHref.href,
+                      );
+                      logWarn(
+                        `Footnote text not found for label: ${fn.label}`,
+                        logContext,
+                      );
                       return [];
                     }
 

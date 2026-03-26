@@ -6,8 +6,13 @@ import { uniqBy } from 'es-toolkit';
 import { chromium, devices } from 'playwright';
 import z from 'zod';
 import { getDocumentId } from '@/lib/crawler/getId';
+import {
+  type LogContext,
+  logError,
+  logInfo,
+  logWarn,
+} from '@/lib/crawler/logUtils';
 import { MetadataInput, MetadataSchema } from '@/lib/crawler/schema';
-import { logger } from '@/logger/logger';
 
 const postSection = [
   'https://thanhlinh.net/vi/me-maria/bai-viet-ve-me',
@@ -32,7 +37,10 @@ const getPostPageNumber = async (link: string) => {
   const context = await browser.newContext(devices['Desktop Chrome']);
   const page = await context.newPage();
 
-  logger.info(`Fetching page number for link: ${link}`);
+  const infoContext: LogContext = {
+    resourceHref: link,
+  };
+  logInfo(`Fetching page number for link: ${link}`, infoContext);
 
   await retry(
     async () => {
@@ -48,7 +56,10 @@ const getPostPageNumber = async (link: string) => {
   const isVisible = (await page.locator('ul[class*="pagination"]').count()) > 0;
 
   if (!isVisible) {
-    logger.warn(`Pagination not found for link: ${link}`);
+    const warnContext: LogContext = {
+      resourceHref: link,
+    };
+    logWarn(`Pagination not found for link: ${link}`, warnContext);
     await context.close();
     await browser.close();
     return 0;
@@ -172,17 +183,34 @@ export const getMetadataList = async () => {
         const parsedMetadata = MetadataSchema.safeParse(metadata);
 
         if (!parsedMetadata.success) {
-          logger.error(
+          const errorContext: LogContext = {
+            documentId: metadata.documentId,
+            resourceHref: newLink,
+            metadata: {
+              title: metadata.title,
+              source: 'thanhlinh.net',
+            },
+          };
+          logError(
             `Invalid metadata parsed: ${JSON.stringify(
               metadata,
             )}. Errors: ${z.treeifyError(parsedMetadata.error)}`,
+            errorContext,
           );
 
           // eslint-disable-next-line no-continue
           continue;
         }
 
-        logger.info(`Fetched: ${title} - ${newLink}`);
+        const infoContext: LogContext = {
+          documentId: parsedMetadata.data.documentId,
+          resourceHref: newLink,
+          metadata: {
+            title: title || '',
+            source: 'thanhlinh.net',
+          },
+        };
+        logInfo(`Fetched: ${title} - ${newLink}`, infoContext);
 
         currentDocumentNumber += 1;
 

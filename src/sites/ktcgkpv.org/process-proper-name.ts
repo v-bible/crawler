@@ -7,6 +7,7 @@ import {
   writeChapterContent,
 } from '@/lib/crawler/fileUtils';
 import { parseId } from '@/lib/crawler/getId';
+import { type LogContext, logError, logInfo } from '@/lib/crawler/logUtils';
 import { type Footnote, type GenreParams } from '@/lib/crawler/schema';
 import { ChapterTreeSchema } from '@/lib/crawler/treeSchema';
 import {
@@ -16,7 +17,6 @@ import {
 } from '@/lib/crawler/treeUtils';
 import { updateAnnotations } from '@/lib/ner/nerUtils';
 import { type SentenceEntityAnnotation } from '@/lib/ner/schema';
-import { logger } from '@/logger/logger';
 
 // Helper function to extract names from footnote text
 const extractNamesFromFootnote = (footnoteText: string): string[] => {
@@ -81,8 +81,14 @@ const main = () => {
     const treeParse = ChapterTreeSchema.safeParse(fileData);
 
     if (!treeParse.success) {
-      logger.error(
+      const errorContext: LogContext = {
+        metadata: {
+          source: 'ktcgkpv.org',
+        },
+      };
+      logError(
         `Invalid data in file ${corpusFilePath}: ${treeParse.error.message}`,
+        errorContext,
       );
       continue;
     }
@@ -138,7 +144,13 @@ const main = () => {
     const parseParams = parseId(treeData.root.file.id);
 
     if (!parseParams) {
-      logger.error(`Invalid file ID: ${treeData.root.file.id}`);
+      const errorContext: LogContext = {
+        documentId: treeData.root.file.meta?.documentId,
+        metadata: {
+          source: 'ktcgkpv.org',
+        },
+      };
+      logError(`Invalid file ID: ${treeData.root.file.id}`, errorContext);
       continue;
     }
 
@@ -183,7 +195,19 @@ const main = () => {
       documentTitle: newTree.root.file.meta.title,
     });
 
-    logger.info(`Updated annotations for ${newTree.root.file.meta.documentId}`);
+    const infoContext: LogContext = {
+      documentId: newTree.root.file.meta.documentId,
+      chapterNumber: chapterParams.chapterNumber,
+      chapterName: chapterParams.chapterName,
+      metadata: {
+        title: newTree.root.file.meta.title,
+        source: 'ktcgkpv.org',
+      },
+    };
+    logInfo(
+      `Updated annotations for ${newTree.root.file.meta.documentId}`,
+      infoContext,
+    );
   }
 };
 

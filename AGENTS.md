@@ -2,6 +2,37 @@
 
 ## Code Conventions
 
+### Logging and Output
+
+**CRITICAL: NO EMOJIS ALLOWED**
+
+- **NEVER use emojis in code, logs, or output**
+  - ❌ `logger.info('✅ Success')` - FORBIDDEN
+  - ❌ `console.log('🔍 Checking...')` - FORBIDDEN
+  - ✅ `logger.info('Success')` - Correct
+  - ✅ `console.log('Checking...')` - Correct
+
+- **Use plain, descriptive text**
+  - Emojis are inconsistent across terminals and systems
+  - They interfere with log parsing and grep
+  - Professional codebases use plain text
+
+### Import Style
+
+**CRITICAL: NO DYNAMIC IMPORTS**
+
+- **NEVER use dynamic imports (`await import()`) for regular code**
+  - ❌ `const { readFile } = await import('fs/promises')` - FORBIDDEN
+  - ❌ `await import('@/lib/utils')` - FORBIDDEN
+  - ✅ `import { readFile } from 'fs/promises'` - Correct
+  - ✅ `import { someUtil } from '@/lib/utils'` - Correct
+
+- **Use static imports at the top of files**
+  - Dynamic imports make code harder to understand
+  - They break static analysis tools
+  - They complicate dependency tracking
+  - Only use for actual lazy-loading scenarios (rare)
+
 ### Naming Conventions
 
 **Consistency is critical.** Always follow existing naming patterns in the codebase:

@@ -12,10 +12,18 @@ import {
   withCheckpoint,
 } from '@/lib/crawler/checkpoint';
 import {
+  readCheckpointFile,
+  writeCheckpointFile,
+} from '@/lib/crawler/checkpointFileUtils';
+import {
   type GetDefaultDocumentPathFunction,
   writeChapterContent,
 } from '@/lib/crawler/fileUtils';
 import { defaultFilterCheckpoint } from '@/lib/crawler/filterUtils';
+import {
+  extractFailedCheckpoints,
+  parseLogErrors,
+} from '@/lib/crawler/logUtils';
 import {
   type ChapterParams,
   type DocumentParams,
@@ -153,6 +161,10 @@ class Crawler {
 
   timeout: number;
 
+  logFilePath?: string;
+
+  enableAutoErrorRecovery: boolean;
+
   constructor(
     args: Omit<GenreParams, 'genre'> & {
       name: string;
@@ -173,6 +185,8 @@ class Crawler {
       outputFileDir?: string;
       checkpointOptions?: WithCheckpointOptions<Metadata>;
       timeout?: number;
+      logFilePath?: string;
+      enableAutoErrorRecovery?: boolean;
     },
   ) {
     this.name = args.name;
@@ -209,6 +223,9 @@ class Crawler {
     this.checkpointOptions = args.checkpointOptions || {};
 
     this.timeout = args.timeout || DEFAULT_CRAWL_TIMEOUT_MS;
+
+    this.logFilePath = args.logFilePath;
+    this.enableAutoErrorRecovery = args.enableAutoErrorRecovery ?? true;
   }
 
   async run() {
@@ -298,6 +315,21 @@ class Crawler {
 
     // eslint-disable-next-line no-restricted-syntax
     for await (const checkpoint of metadataCheckpoint) {
+      // Re-read checkpoint file to check if already completed (concurrent safety)
+      const currentCheckpoints = await readCheckpointFile<
+        Metadata,
+        GetChaptersFunctionHref
+      >(this.checkpointFilePath);
+      const currentCheckpoint = currentCheckpoints.find(
+        (cp) => cp.id === checkpoint.id,
+      );
+
+      // Skip if checkpoint is already completed in file
+      if (currentCheckpoint?.completed) {
+        // eslint-disable-next-line no-continue
+        continue;
+      }
+
       const parseRes = MetadataSchema.safeParse(checkpoint.params);
 
       if (!parseRes.success) {
@@ -320,19 +352,26 @@ class Crawler {
 
       const subtasks = checkpoint?.subtasks || [];
 
-      const isAllSubtasksComplete = subtasks.every(
-        (subtask) => subtask.completed,
-      );
-
-      // If all subtasks are complete, mark checkpoint complete and skip
-      if (isAllSubtasksComplete) {
-        setCheckpointComplete(checkpoint.id, true);
-        // eslint-disable-next-line no-continue
-        continue;
-      }
-
       // eslint-disable-next-line no-restricted-syntax
       for await (const subtask of subtasks) {
+        // Re-read checkpoint to check if subtask is completed (concurrent safety)
+        const updatedCheckpoints = await readCheckpointFile<
+          Metadata,
+          GetChaptersFunctionHref
+        >(this.checkpointFilePath);
+        const updatedCheckpoint = updatedCheckpoints.find(
+          (cp) => cp.id === checkpoint.id,
+        );
+        const updatedSubtask = updatedCheckpoint?.subtasks?.find(
+          (st) => st.id === subtask.id,
+        );
+
+        // Skip if subtask is already completed in file
+        if (updatedSubtask?.completed) {
+          // eslint-disable-next-line no-continue
+          continue;
+        }
+
         // Track if this specific subtask processed successfully
         let subtaskSuccessful = true;
         const { href, props } = subtask.params;
@@ -534,14 +573,113 @@ class Crawler {
         }
       }
 
-      // After processing all subtasks, check if all are now complete
-      const allSubtasksNowComplete = subtasks.every(
-        (subtask) => subtask.completed,
+      // Check if all subtasks are now complete
+      const finalCheckpoints = await readCheckpointFile<
+        Metadata,
+        GetChaptersFunctionHref
+      >(this.checkpointFilePath);
+      const finalCheckpoint = finalCheckpoints.find(
+        (cp) => cp.id === checkpoint.id,
+      );
+      const allSubtasksNowComplete = finalCheckpoint?.subtasks?.every(
+        (st) => st.completed,
       );
 
       if (allSubtasksNowComplete) {
         setCheckpointComplete(checkpoint.id, true);
       }
+    }
+
+    // After processing, check logs for errors and mark failed items
+    if (this.enableAutoErrorRecovery && this.logFilePath) {
+      await this.recoverFromErrors();
+    }
+  }
+
+  /**
+   * Check logs for errors and mark failed checkpoints for re-crawl
+   */
+  private async recoverFromErrors(): Promise<void> {
+    if (!this.logFilePath) {
+      return;
+    }
+
+    try {
+      logger.info('Checking logs for errors and marking failed checkpoints');
+
+      const errors = parseLogErrors(this.logFilePath);
+
+      if (errors.length === 0) {
+        return;
+      }
+
+      const failedCheckpoints = extractFailedCheckpoints(errors);
+
+      if (failedCheckpoints.size === 0) {
+        return;
+      }
+
+      const checkpoints = await readCheckpointFile<
+        Metadata,
+        GetChaptersFunctionHref
+      >(this.checkpointFilePath);
+
+      let updated = 0;
+
+      // Mark failed checkpoints as incomplete
+      const updatedCheckpoints = checkpoints.map((checkpoint) => {
+        const parseRes = MetadataSchema.safeParse(checkpoint.params);
+
+        if (!parseRes.success) {
+          return checkpoint;
+        }
+
+        const metadata = parseRes.data;
+        const failedChapters = failedCheckpoints.get(metadata.documentId);
+
+        if (!failedChapters || failedChapters.size === 0) {
+          return checkpoint;
+        }
+
+        // Mark failed subtasks and parent as incomplete
+        const updatedSubtasks = checkpoint.subtasks?.map((subtask) => {
+          const chapterNumber = subtask.params?.props?.chapterNumber;
+
+          if (chapterNumber && failedChapters.has(chapterNumber)) {
+            if (subtask.completed) {
+              updated += 1;
+            }
+            return {
+              ...subtask,
+              completed: false,
+            };
+          }
+
+          return subtask;
+        });
+
+        // If any subtask was marked incomplete, mark parent incomplete too
+        const hasIncompleteSubtasks = updatedSubtasks?.some(
+          (st) => !st.completed,
+        );
+
+        if (hasIncompleteSubtasks) {
+          return {
+            ...checkpoint,
+            completed: false,
+            subtasks: updatedSubtasks,
+          };
+        }
+
+        return checkpoint;
+      });
+
+      if (updated > 0) {
+        await writeCheckpointFile(this.checkpointFilePath, updatedCheckpoints);
+        logger.info(`Marked ${updated} failed checkpoints as incomplete`);
+      }
+    } catch (error) {
+      logger.error('Error during automatic error recovery:', error);
     }
   }
 }

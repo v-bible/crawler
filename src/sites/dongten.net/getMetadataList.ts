@@ -6,8 +6,13 @@ import { uniqBy } from 'es-toolkit';
 import { chromium, devices } from 'playwright';
 import z from 'zod';
 import { getDocumentId } from '@/lib/crawler/getId';
+import {
+  type LogContext,
+  logError,
+  logInfo,
+  logWarn,
+} from '@/lib/crawler/logUtils';
 import { MetadataInput, MetadataSchema } from '@/lib/crawler/schema';
-import { logger } from '@/logger/logger';
 
 const postSection = [
   'https://dongten.net/category/hoi-dap-cong-giao/',
@@ -32,7 +37,10 @@ const getPostPageNumber = async (link: string) => {
   const context = await browser.newContext(devices['Desktop Chrome']);
   const page = await context.newPage();
 
-  logger.info(`Fetching page number for link: ${link}`);
+  const infoContext: LogContext = {
+    resourceHref: link,
+  };
+  logInfo(`Fetching page number for link: ${link}`, infoContext);
 
   await retry(
     async () => {
@@ -48,7 +56,10 @@ const getPostPageNumber = async (link: string) => {
   const isVisible = (await page.locator('div.pagination').count()) > 0;
 
   if (!isVisible) {
-    logger.warn(`Pagination not found for link: ${link}`);
+    const warnContext: LogContext = {
+      resourceHref: link,
+    };
+    logWarn(`Pagination not found for link: ${link}`, warnContext);
     await context.close();
     await browser.close();
     return 1;
@@ -106,7 +117,16 @@ export const getMetadataList = async () => {
         )?.trim();
 
         if (!href) {
-          logger.warn(`No link found for article with title: ${title}`);
+          const warnContext: LogContext = {
+            metadata: {
+              title: title || '',
+              source: 'dongten.net',
+            },
+          };
+          logWarn(
+            `No link found for article with title: ${title}`,
+            warnContext,
+          );
           // eslint-disable-next-line no-continue
           continue;
         }
@@ -127,8 +147,17 @@ export const getMetadataList = async () => {
 
             fmtDate = format(publishedDate, 'dd/MM/yyyy');
           } catch (error) {
-            logger.error(
-              `Error parsing date "${publishDateStr}" for article with title: ${title}. Error: ${error}`,
+            const errorContext: LogContext = {
+              resourceHref: href,
+              metadata: {
+                title: title || '',
+                source: 'dongten.net',
+              },
+            };
+            logError(
+              `Error parsing date "${publishDateStr}" for article with title: ${title}`,
+              errorContext,
+              error as Error,
             );
           }
         }
@@ -158,17 +187,34 @@ export const getMetadataList = async () => {
         const parsedMetadata = MetadataSchema.safeParse(metadata);
 
         if (!parsedMetadata.success) {
-          logger.error(
+          const errorContext: LogContext = {
+            documentId: metadata.documentId,
+            resourceHref: href,
+            metadata: {
+              title: metadata.title,
+              source: 'dongten.net',
+            },
+          };
+          logError(
             `Invalid metadata parsed: ${JSON.stringify(
               metadata,
             )}. Errors: ${z.treeifyError(parsedMetadata.error)}`,
+            errorContext,
           );
 
           // eslint-disable-next-line no-continue
           continue;
         }
 
-        logger.info(`Fetched: ${title} - ${href}`);
+        const infoContext: LogContext = {
+          documentId: parsedMetadata.data.documentId,
+          resourceHref: href,
+          metadata: {
+            title: title || '',
+            source: 'dongten.net',
+          },
+        };
+        logInfo(`Fetched: ${title} - ${href}`, infoContext);
 
         currentDocumentNumber += 1;
 

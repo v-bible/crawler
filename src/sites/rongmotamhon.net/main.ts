@@ -28,6 +28,8 @@ const SHARED_CHECKPOINT_PATH = path.join(
   'RB-rongmotamhon.net-checkpoint.json',
 );
 
+const LOG_FILE_PATH = 'scraping.log';
+
 const getPageContentHandlers = [
   {
     inputFn: getPageContent,
@@ -61,6 +63,7 @@ export const crawler = new Crawler({
   domain: 'R',
   subDomain: 'B',
   checkpointFilePath: SHARED_CHECKPOINT_PATH,
+  logFilePath: LOG_FILE_PATH,
   getMetadataList,
   sortCheckpoint: sortCheckpointAsc,
   filterCheckpoint: filterChapterCheckpoint,
@@ -74,6 +77,7 @@ const crawler2 = new Crawler({
   domain: 'R',
   subDomain: 'B',
   checkpointFilePath: SHARED_CHECKPOINT_PATH,
+  logFilePath: LOG_FILE_PATH,
   getMetadataList,
   sortCheckpoint: sortCheckpointDesc,
   filterCheckpoint: filterChapterCheckpoint,
@@ -87,6 +91,7 @@ const crawler3 = new Crawler({
   domain: 'R',
   subDomain: 'B',
   checkpointFilePath: SHARED_CHECKPOINT_PATH,
+  logFilePath: LOG_FILE_PATH,
   getMetadataList,
   sortCheckpoint: (a, b) => {
     // Sort from middle outward (interleaved pattern)

@@ -95,7 +95,7 @@ const analyzeFile = (filePath: string, genre: string): FileStats | null => {
     };
   } catch (error) {
     console.warn(
-      `⚠️  Skipping ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+      `WARNING: Skipping ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
     );
     return null;
   }
