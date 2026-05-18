@@ -13,6 +13,7 @@ export const AVAILABLE_SITES = [
   'hdgmvietnam.com',
   'ktcgkpv.org',
   'rongmotamhon.net',
+  'tgpsaigon.net',
   'thanhlinh.net',
 ] as const;
 
@@ -45,6 +46,10 @@ export const siteRegistry: Record<AvailableSite, () => Promise<Crawler>> = {
   },
   'rongmotamhon.net': async () => {
     const { crawler } = await import('@/sites/rongmotamhon.net/main');
+    return crawler;
+  },
+  'tgpsaigon.net': async () => {
+    const { crawler } = await import('@/sites/tgpsaigon.net/main');
     return crawler;
   },
   'thanhlinh.net': async () => {
