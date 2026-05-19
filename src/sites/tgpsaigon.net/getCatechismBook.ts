@@ -8,7 +8,6 @@ import { PDFDocument } from 'pdf-lib';
 import { type APIRequestContext, chromium, devices } from 'playwright';
 import { fetch } from 'undici';
 import { DEFAULT_CATECHISM_OUTPUT_DIR } from '@/constants';
-import Bluebird from '@/lib/bluebird';
 import { type GetPageExtraContentFunction } from '@/lib/crawler/crawler';
 import { logger } from '@/logger/logger';
 
@@ -463,135 +462,103 @@ async function downloadLessonImages(params: {
   return { heroFilePath, detailFilePaths };
 }
 
-export const getCatechismBook: GetPageExtraContentFunction = ({
+export const getCatechismBook: GetPageExtraContentFunction = async ({
   chapterParams,
 }) => {
-  return new Bluebird.Promise(async (resolve, reject, onCancel) => {
-    const gradeNum = chapterParams.chapterNumber;
-    const gradeTitle = `Hiệp thông ${gradeNum}`;
+  const gradeNum = chapterParams.chapterNumber;
+  const gradeTitle = `Hiệp thông ${gradeNum}`;
 
-    const outputDir = DEFAULT_CATECHISM_OUTPUT_DIR;
-    const gradeDir = path.join(outputDir, sanitizeName(gradeTitle));
-    ensureDir(gradeDir);
+  const outputDir = DEFAULT_CATECHISM_OUTPUT_DIR;
+  const gradeDir = path.join(outputDir, sanitizeName(gradeTitle));
+  ensureDir(gradeDir);
 
-    const browser = await chromium.launch({ headless: true });
-    const context = await browser.newContext(devices['Desktop Chrome']);
-    const page = await context.newPage();
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext(devices['Desktop Chrome']);
+  const page = await context.newPage();
 
-    onCancel!(async () => {
-      try {
-        await context.close();
-      } catch {
-        // ignore
-      }
-      try {
-        await browser.close();
-      } catch {
-        // ignore
-      }
-
-      reject(new Error('Operation was cancelled'));
+  try {
+    logger.info('Crawling catechism grade images', {
+      gradeNum,
+      gradeTitle,
+      outputDir,
     });
 
-    try {
-      logger.info('Crawling catechism grade images', {
-        gradeNum,
-        gradeTitle,
-        outputDir,
+    const sections = getSectionsForGrade(gradeNum);
+
+    const gradeDetailImagePaths: string[] = [];
+
+    for (const section of sections) {
+      const sectionDir = path.join(gradeDir, sanitizeName(section.title));
+      ensureDir(sectionDir);
+
+      const lessonLinks = await collectLessonLinks(page, section.url);
+      lessonLinks.sort((a, b) => {
+        const an = getMeetNumberFromTitle(a.title);
+        const bn = getMeetNumberFromTitle(b.title);
+        if (an != null && bn != null) return an - bn;
+        if (an != null) return -1;
+        if (bn != null) return 1;
+        return a.title.localeCompare(b.title);
       });
 
-      const sections = getSectionsForGrade(gradeNum);
+      const effectiveLessons =
+        section.title === 'Hướng dẫn sử dụng'
+          ? lessonLinks.slice(0, 1)
+          : lessonLinks;
 
-      const gradeDetailImagePaths: string[] = [];
+      for (const lesson of effectiveLessons) {
+        const isGuideSection = section.title === 'Hướng dẫn sử dụng';
+        const lessonFolderName = isGuideSection
+          ? sanitizeName('Hướng dẫn sử dụng')
+          : buildLessonFolderName(lesson.title);
+        const lessonDir = path.join(sectionDir, lessonFolderName);
+        ensureDir(lessonDir);
 
-      for (const section of sections) {
-        const sectionDir = path.join(gradeDir, sanitizeName(section.title));
-        ensureDir(sectionDir);
+        const imagesDir = path.join(lessonDir, 'images');
+        ensureDir(imagesDir);
 
-        const lessonLinks = await collectLessonLinks(page, section.url);
-        lessonLinks.sort((a, b) => {
-          const an = getMeetNumberFromTitle(a.title);
-          const bn = getMeetNumberFromTitle(b.title);
-          if (an != null && bn != null) return an - bn;
-          if (an != null) return -1;
-          if (bn != null) return 1;
-          return a.title.localeCompare(b.title);
+        const lessonFileBase = buildLessonFileBase(gradeNum, lessonFolderName);
+
+        const { detailFilePaths } = await downloadLessonImages({
+          page,
+          lessonUrl: lesson.href,
+          imagesDir,
+          lessonFileBase,
         });
 
-        const effectiveLessons =
-          section.title === 'Hướng dẫn sử dụng'
-            ? lessonLinks.slice(0, 1)
-            : lessonLinks;
+        for (const pth of detailFilePaths) gradeDetailImagePaths.push(pth);
 
-        for (const lesson of effectiveLessons) {
-          const isGuideSection = section.title === 'Hướng dẫn sử dụng';
-          const lessonFolderName = isGuideSection
-            ? sanitizeName('Hướng dẫn sử dụng')
-            : buildLessonFolderName(lesson.title);
-          const lessonDir = path.join(sectionDir, lessonFolderName);
-          ensureDir(lessonDir);
+        const lessonPdfPath = path.join(lessonDir, `${lessonFileBase}.pdf`);
+        await createPdfFromImages(detailFilePaths, lessonPdfPath);
 
-          const imagesDir = path.join(lessonDir, 'images');
-          ensureDir(imagesDir);
+        const { supported, unsupported } =
+          countSupportedImages(detailFilePaths);
 
-          const lessonFileBase = buildLessonFileBase(
-            gradeNum,
-            lessonFolderName,
-          );
-
-          const { detailFilePaths } = await downloadLessonImages({
-            page,
-            lessonUrl: lesson.href,
-            imagesDir,
-            lessonFileBase,
-          });
-
-          for (const p of detailFilePaths) gradeDetailImagePaths.push(p);
-
-          const lessonPdfPath = path.join(lessonDir, `${lessonFileBase}.pdf`);
-          await createPdfFromImages(detailFilePaths, lessonPdfPath);
-
-          const { supported, unsupported } =
-            countSupportedImages(detailFilePaths);
-
-          logger.info('Downloaded lesson images', {
-            gradeNum,
-            gradeTitle,
-            sectionTitle: section.title,
-            lessonTitle: lessonFolderName,
-            lessonUrl: lesson.href,
-            detailImages: detailFilePaths.length,
-            supportedImages: supported,
-            unsupportedImages: unsupported,
-            lessonPdfPath,
-          });
-        }
-      }
-
-      const gradePdfPath = path.join(gradeDir, `${gradeTitle}.pdf`);
-      await createPdfFromImages(gradeDetailImagePaths, gradePdfPath);
-
-      logger.info('Catechism grade finished', {
-        gradeNum,
-        gradeTitle,
-        outputDir,
-        gradePdfPath,
-      });
-
-      resolve();
-    } catch (error) {
-      reject(error as Error);
-    } finally {
-      try {
-        await context.close();
-      } catch {
-        // ignore
-      }
-      try {
-        await browser.close();
-      } catch {
-        // ignore
+        logger.info('Downloaded lesson images', {
+          gradeNum,
+          gradeTitle,
+          sectionTitle: section.title,
+          lessonTitle: lessonFolderName,
+          lessonUrl: lesson.href,
+          detailImages: detailFilePaths.length,
+          supportedImages: supported,
+          unsupportedImages: unsupported,
+          lessonPdfPath,
+        });
       }
     }
-  });
+
+    const gradePdfPath = path.join(gradeDir, `${gradeTitle}.pdf`);
+    await createPdfFromImages(gradeDetailImagePaths, gradePdfPath);
+
+    logger.info('Catechism grade finished', {
+      gradeNum,
+      gradeTitle,
+      outputDir,
+      gradePdfPath,
+    });
+  } finally {
+    await context.close();
+    await browser.close();
+  }
 };

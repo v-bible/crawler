@@ -5,7 +5,6 @@ import {
   DEFAULT_CRAWL_TIMEOUT_MS,
   DEFAULT_OUTPUT_FILE_DIR,
 } from '@/constants';
-import Bluebird, { withBluebirdTimeout } from '@/lib//bluebird';
 import {
   type Checkpoint,
   type WithCheckpointOptions,
@@ -44,6 +43,7 @@ import {
   generateJsonTree,
   generateXmlTree,
 } from '@/lib/crawler/treeUtils';
+import { withTimeout } from '@/lib/timeout';
 import { logger } from '@/logger/logger';
 
 export const defaultStringifyFunctions: StringifyTreeFunction[] = [
@@ -86,7 +86,7 @@ export type GetChaptersFunction<
   resourceHref: CrawHref;
   documentParams?: DocumentParams;
   metadata?: Metadata;
-}) => Bluebird<Required<T>[]>;
+}) => Promise<Required<T>[]>;
 
 export type GetPageContentParams<
   T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
@@ -98,15 +98,15 @@ export type GetPageContentParams<
 
 export type GetPageContentFunction<
   T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
-> = (params: GetPageContentParams<T>) => Bluebird<Page[]>;
+> = (params: GetPageContentParams<T>) => Promise<Page[]>;
 
 export type GetPageContentMdFunction<
   T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
-> = (params: GetPageContentParams<T>) => Bluebird<string>;
+> = (params: GetPageContentParams<T>) => Promise<string>;
 
 export type GetPageExtraContentFunction<
   T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
-> = (params: GetPageContentParams<T>) => Bluebird<void>;
+> = (params: GetPageContentParams<T>) => Promise<void>;
 
 export type GetPageContentHandler = {
   outputDir?: string;
@@ -272,7 +272,7 @@ class Crawler {
 
         if (metadata.hasChapters) {
           try {
-            chapterCrawlList = await withBluebirdTimeout(
+            chapterCrawlList = await withTimeout(
               () =>
                 this.getChapters({
                   resourceHref: { href: metadata.sourceURL },
@@ -418,7 +418,7 @@ class Crawler {
           try {
             const pageInputFn = handler.inputFn;
             if (pageInputFn) {
-              const pageContent = await withBluebirdTimeout(
+              const pageContent = await withTimeout(
                 () =>
                   pageInputFn({
                     resourceHref: { href, props },
@@ -491,7 +491,7 @@ class Crawler {
             // eslint-disable-next-line no-restricted-syntax
             for await (const extraFn of extraContentFnArr) {
               try {
-                await withBluebirdTimeout(
+                await withTimeout(
                   () =>
                     extraFn({
                       resourceHref: { href, props },
@@ -550,7 +550,7 @@ class Crawler {
             for await (const getPageContentMdHandlerFn of getPageContentMdHandler) {
               const mdInputFn = getPageContentMdHandlerFn.inputFn;
               if (mdInputFn) {
-                const mdContent = await withBluebirdTimeout(
+                const mdContent = await withTimeout(
                   () =>
                     mdInputFn({
                       resourceHref: { href, props },

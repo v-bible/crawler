@@ -1,5 +1,4 @@
 import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
-import Bluebird from '@/lib/bluebird';
 import { Crawler } from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
 import { filterNonChapterCheckpoint } from '@/lib/crawler/filterUtils';
@@ -19,18 +18,16 @@ export const crawler = new Crawler({
   },
   sortCheckpoint: sortCheckpointAsc,
   filterCheckpoint: filterNonChapterCheckpoint,
-  getChapters: ({ resourceHref }) => {
-    return new Bluebird.Promise((resolve) => {
-      // NOTE: These pages have no chapters
-      resolve([
-        {
-          href: resourceHref.href,
-          props: {
-            chapterNumber: 1,
-          },
+  getChapters: async ({ resourceHref }) => {
+    // NOTE: These pages have no chapters
+    return [
+      {
+        href: resourceHref.href,
+        props: {
+          chapterNumber: 1,
         },
-      ]);
-    });
+      },
+    ];
   },
   getPageContentHandler: {
     inputFn: getPageContent,

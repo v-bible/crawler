@@ -1,6 +1,5 @@
 import path from 'path';
 import { DEFAULT_CHECKPOINT_DIR } from '@/constants';
-import Bluebird from '@/lib/bluebird';
 import { Crawler } from '@/lib/crawler/crawler';
 import { getCatechismBook } from '@/sites/tgpsaigon.net/getCatechismBook';
 import { getMetadataList } from '@/sites/tgpsaigon.net/getMetadataList';
@@ -21,20 +20,18 @@ export const crawler = new Crawler({
       metadataRow.source === 'tgpsaigon.net' && metadataRow.sourceType === 'web'
     );
   },
-  getChapters: ({ resourceHref, documentParams, metadata }) => {
-    return new Bluebird.Promise((resolve) => {
-      const gradeNum = documentParams?.documentNumber ?? 1;
+  getChapters: async ({ resourceHref, documentParams, metadata }) => {
+    const gradeNum = documentParams?.documentNumber ?? 1;
 
-      resolve([
-        {
-          href: resourceHref.href,
-          props: {
-            chapterNumber: gradeNum,
-            chapterName: metadata?.title ?? `Hiệp thông ${gradeNum}`,
-          },
+    return [
+      {
+        href: resourceHref.href,
+        props: {
+          chapterNumber: gradeNum,
+          chapterName: metadata?.title ?? `Hiệp thông ${gradeNum}`,
         },
-      ]);
-    });
+      },
+    ];
   },
   getPageContentHandler: {
     extraContentFn: getCatechismBook,
