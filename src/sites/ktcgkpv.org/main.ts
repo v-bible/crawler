@@ -1,5 +1,4 @@
 import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
-import Bluebird from '@/lib/bluebird';
 import { Crawler } from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
 import { sortCheckpointAsc } from '@/lib/crawler/sortUtils';
@@ -23,17 +22,14 @@ export const crawler = new Crawler({
   },
   getPageContentMdHandler: [
     {
-      inputFn: ({ resourceHref }) => {
-        return new Bluebird.Promise(async (resolve, reject) => {
-          if (!resourceHref.props?.mdHref) {
-            reject(new Error('MD href is not provided'));
-            return;
-          }
+      inputFn: async ({ resourceHref }) => {
+        if (!resourceHref.props?.mdHref) {
+          throw new Error('MD href is not provided');
+        }
 
-          const md = await (await fetch(resourceHref.props.mdHref)).text();
+        const md = await (await fetch(resourceHref.props.mdHref)).text();
 
-          resolve(md);
-        });
+        return md;
       },
     },
   ],

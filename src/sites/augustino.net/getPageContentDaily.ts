@@ -2,7 +2,6 @@
 /* eslint-disable no-continue */
 import retry from 'async-retry';
 import { type Locator, chromium, devices } from 'playwright';
-import Bluebird from '@/lib/bluebird';
 import { type GetPageContentFunction } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
 import { type Page, type SingleLanguageSentence } from '@/lib/crawler/schema';
@@ -115,118 +114,108 @@ const processGospel = async (locator: Locator) => {
   return sentenceData;
 };
 
-const getPageContentDaily = (({ resourceHref, chapterParams }) => {
-  return new Bluebird.Promise(async (resolve, reject, onCancel) => {
-    const { href } = resourceHref;
+const getPageContentDaily: GetPageContentFunction = async ({
+  resourceHref,
+  chapterParams,
+}) => {
+  const { href } = resourceHref;
 
-    const browser = await chromium.launch();
-    const context = await browser.newContext(devices['Desktop Chrome']);
-    const page = await context.newPage();
+  const browser = await chromium.launch();
+  const context = await browser.newContext(devices['Desktop Chrome']);
+  const page = await context.newPage();
 
-    try {
-      // Set up cancellation handler after resources are created
-      onCancel!(async () => {
-        await context.close();
-        await browser.close();
+  try {
+    await retry(
+      async () => {
+        await page.goto(href);
+      },
+      {
+        retries: 5,
+      },
+    );
 
-        reject(new Error('Operation was cancelled'));
-      });
+    const bodyBlockLocator = await page
+      .locator('div.reading-blocks > div.reading-block')
+      .all();
 
-      await retry(
-        async () => {
-          await page.goto(href);
-        },
-        {
-          retries: 5,
-        },
-      );
+    const scriptureBlocks = bodyBlockLocator.slice(0, -1);
 
-      const bodyBlockLocator = await page
-        .locator('div.reading-blocks > div.reading-block')
-        .all();
+    const contentBlock = bodyBlockLocator.at(-1);
 
-      const scriptureBlocks = bodyBlockLocator.slice(0, -1);
+    const sentenceData: Omit<
+      SingleLanguageSentence,
+      'id' | 'footnotes' | 'headings'
+    >[] = [];
 
-      const contentBlock = bodyBlockLocator.at(-1);
-
-      const sentenceData: Omit<
-        SingleLanguageSentence,
-        'id' | 'footnotes' | 'headings'
-      >[] = [];
-
-      // NOTE: Process all scripture blocks
-      for await (const block of scriptureBlocks) {
-        const blockSentences = await processGospel(block);
-        sentenceData.push(...blockSentences);
-      }
-
-      const contentParagraphs = (await contentBlock?.locator('p').all()) || [];
-
-      const contentSentences: Omit<
-        SingleLanguageSentence,
-        'id' | 'footnotes' | 'headings'
-      >[] = [];
-
-      for await (const paragraphLocator of contentParagraphs) {
-        const paragraphText = (await paragraphLocator.textContent()) || '';
-        const sentences = winkNLPInstance
-          .readDoc(paragraphText)
-          .sentences()
-          .out()
-          .map((sentence) => {
-            return {
-              type: 'single',
-              languageCode: 'V',
-              text: sentence.trim(),
-            } satisfies Omit<
-              SingleLanguageSentence,
-              'id' | 'footnotes' | 'headings'
-            >;
-          });
-        contentSentences.push(...sentences);
-      }
-
-      const newSentences = [...sentenceData, ...contentSentences].map(
-        (sentence, sentenceNumber) => {
-          const newSentenceId = getSentenceId({
-            ...chapterParams,
-            pageNumber: 1,
-            sentenceNumber: sentenceNumber + 1,
-          });
-
-          return {
-            ...sentence,
-            id: newSentenceId,
-            footnotes: [],
-            headings: [],
-          };
-        },
-      );
-
-      const pageData = [
-        {
-          id: getPageId({
-            ...chapterParams,
-            pageNumber: 1,
-          }),
-          number: 1,
-          sentences: newSentences,
-        } satisfies Page,
-      ];
-
-      // Clean up resources
-      await context.close();
-      await browser.close();
-
-      resolve(pageData);
-    } catch (error) {
-      // Clean up resources on error
-      await context.close();
-      await browser.close();
-
-      reject(error);
+    // NOTE: Process all scripture blocks
+    for await (const block of scriptureBlocks) {
+      const blockSentences = await processGospel(block);
+      sentenceData.push(...blockSentences);
     }
-  });
-}) satisfies GetPageContentFunction;
+
+    const contentParagraphs = (await contentBlock?.locator('p').all()) || [];
+
+    const contentSentences: Omit<
+      SingleLanguageSentence,
+      'id' | 'footnotes' | 'headings'
+    >[] = [];
+
+    for await (const paragraphLocator of contentParagraphs) {
+      const paragraphText = (await paragraphLocator.textContent()) || '';
+      const sentences = winkNLPInstance
+        .readDoc(paragraphText)
+        .sentences()
+        .out()
+        .map((sentence) => {
+          return {
+            type: 'single',
+            languageCode: 'V',
+            text: sentence.trim(),
+          } satisfies Omit<
+            SingleLanguageSentence,
+            'id' | 'footnotes' | 'headings'
+          >;
+        });
+      contentSentences.push(...sentences);
+    }
+
+    const newSentences = [...sentenceData, ...contentSentences].map(
+      (sentence, sentenceNumber) => {
+        const newSentenceId = getSentenceId({
+          ...chapterParams,
+          pageNumber: 1,
+          sentenceNumber: sentenceNumber + 1,
+        });
+
+        return {
+          ...sentence,
+          id: newSentenceId,
+          footnotes: [],
+          headings: [],
+        };
+      },
+    );
+
+    const pageData = [
+      {
+        id: getPageId({
+          ...chapterParams,
+          pageNumber: 1,
+        }),
+        number: 1,
+        sentences: newSentences,
+      } satisfies Page,
+    ];
+
+    // Clean up resources
+    await context.close();
+    await browser.close();
+
+    return pageData;
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+};
 
 export { getPageContentDaily };

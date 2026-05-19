@@ -19,6 +19,10 @@ export const DEFAULT_METADATA_FILE_PATH = path.join(
 const DEFAULT_OUTPUT_DIR = path.join(PROJECT_ROOT, 'dist');
 export const DEFAULT_OUTPUT_FILE_DIR = path.join(DEFAULT_OUTPUT_DIR, 'corpus');
 export const DEFAULT_TASK_DIR = path.join(DEFAULT_OUTPUT_DIR, 'task-data');
+export const DEFAULT_CATECHISM_OUTPUT_DIR = path.join(
+  DEFAULT_OUTPUT_DIR,
+  'catechism',
+);
 
 // Checkpoint paths
 export const DEFAULT_CHECKPOINT_DIR = DEFAULT_OUTPUT_DIR;

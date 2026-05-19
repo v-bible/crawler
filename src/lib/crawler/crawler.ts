@@ -5,7 +5,6 @@ import {
   DEFAULT_CRAWL_TIMEOUT_MS,
   DEFAULT_OUTPUT_FILE_DIR,
 } from '@/constants';
-import Bluebird, { withBluebirdTimeout } from '@/lib//bluebird';
 import {
   type Checkpoint,
   type WithCheckpointOptions,
@@ -44,6 +43,7 @@ import {
   generateJsonTree,
   generateXmlTree,
 } from '@/lib/crawler/treeUtils';
+import { withTimeout } from '@/lib/timeout';
 import { logger } from '@/logger/logger';
 
 export const defaultStringifyFunctions: StringifyTreeFunction[] = [
@@ -86,7 +86,7 @@ export type GetChaptersFunction<
   resourceHref: CrawHref;
   documentParams?: DocumentParams;
   metadata?: Metadata;
-}) => Bluebird<Required<T>[]>;
+}) => Promise<Required<T>[]>;
 
 export type GetPageContentParams<
   T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
@@ -98,19 +98,19 @@ export type GetPageContentParams<
 
 export type GetPageContentFunction<
   T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
-> = (params: GetPageContentParams<T>) => Bluebird<Page[]>;
+> = (params: GetPageContentParams<T>) => Promise<Page[]>;
 
 export type GetPageContentMdFunction<
   T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
-> = (params: GetPageContentParams<T>) => Bluebird<string>;
+> = (params: GetPageContentParams<T>) => Promise<string>;
 
 export type GetPageExtraContentFunction<
   T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
-> = (params: GetPageContentParams<T>) => Bluebird<void>;
+> = (params: GetPageContentParams<T>) => Promise<void>;
 
 export type GetPageContentHandler = {
   outputDir?: string;
-  inputFn: GetPageContentFunction;
+  inputFn?: GetPageContentFunction;
   outputFn?: GenerateTreeFunction;
   stringifyFn?: StringifyTreeFunction | StringifyTreeFunction[];
   getFileName?: GetDefaultDocumentPathFunction;
@@ -119,7 +119,7 @@ export type GetPageContentHandler = {
 
 export type GetPageContentMdHandler = {
   outputDir?: string;
-  inputFn: GetPageContentMdFunction;
+  inputFn?: GetPageContentMdFunction;
   getFileName?: GetDefaultDocumentPathFunction;
 };
 
@@ -202,8 +202,8 @@ class Crawler {
     this.filterSubtasks = args?.filterSubtasks || defaultFilterCheckpoint;
     this.sortSubtasks = args?.sortSubtasks;
 
-    this.skipCheckpointCheck = args.skipCheckpointCheck || true;
-    this.skipSubtaskCheckpointCheck = args.skipSubtaskCheckpointCheck || true;
+    this.skipCheckpointCheck = args.skipCheckpointCheck ?? true;
+    this.skipSubtaskCheckpointCheck = args.skipSubtaskCheckpointCheck ?? true;
 
     this.getChapters = args.getChapters;
     this.getPageContentHandler = args.getPageContentHandler || [];
@@ -272,7 +272,7 @@ class Crawler {
 
         if (metadata.hasChapters) {
           try {
-            chapterCrawlList = await withBluebirdTimeout(
+            chapterCrawlList = await withTimeout(
               () =>
                 this.getChapters({
                   resourceHref: { href: metadata.sourceURL },
@@ -416,79 +416,82 @@ class Crawler {
           const outputFn = handler.outputFn || generateDataTree;
 
           try {
-            const pageContent = await withBluebirdTimeout(
-              () =>
-                handler.inputFn({
-                  resourceHref: { href, props },
+            const pageInputFn = handler.inputFn;
+            if (pageInputFn) {
+              const pageContent = await withTimeout(
+                () =>
+                  pageInputFn({
+                    resourceHref: { href, props },
+                    chapterParams,
+                    metadata,
+                  }),
+                this.timeout,
+              );
+
+              const parsePageRes = PageSchema.array().safeParse(pageContent);
+
+              if (!parsePageRes.success) {
+                logger.error('Error parsing page content', {
+                  error: z.prettifyError(parsePageRes.error),
+                  href,
                   chapterParams,
-                  metadata,
-                }),
-              this.timeout,
-            );
-
-            const parsePageRes = PageSchema.array().safeParse(pageContent);
-
-            if (!parsePageRes.success) {
-              logger.error('Error parsing page content', {
-                error: z.prettifyError(parsePageRes.error),
-                href,
-                chapterParams,
-              });
-
-              subtaskSuccessful = false;
-              // eslint-disable-next-line no-continue
-              continue;
-            }
-
-            const treeFootnotes = parsePageRes.data
-              .flatMap((page) => {
-                return page.sentences.flatMap((sentence) => {
-                  if (sentence.type === 'single') {
-                    return sentence?.footnotes || [];
-                  }
-
-                  return sentence.array.flatMap(
-                    (lang) => lang?.footnotes || [],
-                  );
                 });
-              })
-              .map((footnote, idx) => ({
-                ...footnote,
-                order: idx,
-              })) satisfies TreeFootnote[];
 
-            const treeHeadings = parsePageRes.data.flatMap((page) => {
-              return page.sentences.flatMap((sentence) => {
-                return sentence.headings || [];
+                subtaskSuccessful = false;
+                // eslint-disable-next-line no-continue
+                continue;
+              }
+
+              const treeFootnotes = parsePageRes.data
+                .flatMap((page) => {
+                  return page.sentences.flatMap((sentence) => {
+                    if (sentence.type === 'single') {
+                      return sentence?.footnotes || [];
+                    }
+
+                    return sentence.array.flatMap(
+                      (lang) => lang?.footnotes || [],
+                    );
+                  });
+                })
+                .map((footnote, idx) => ({
+                  ...footnote,
+                  order: idx,
+                })) satisfies TreeFootnote[];
+
+              const treeHeadings = parsePageRes.data.flatMap((page) => {
+                return page.sentences.flatMap((sentence) => {
+                  return sentence.headings || [];
+                });
+              }) satisfies SentenceHeading[];
+
+              const tree = outputFn({
+                chapterParams,
+                metadata,
+                pages: parsePageRes.data,
+                footnotes: treeFootnotes,
+                headings: treeHeadings,
               });
-            }) satisfies SentenceHeading[];
 
-            const tree = outputFn({
-              chapterParams,
-              metadata,
-              pages: parsePageRes.data,
-              footnotes: treeFootnotes,
-              headings: treeHeadings,
-            });
+              // eslint-disable-next-line no-restricted-syntax
+              for (const stringify of stringifyFnArr) {
+                const { content, extension } = stringify(tree);
 
-            // eslint-disable-next-line no-restricted-syntax
-            for (const stringify of stringifyFnArr) {
-              const { content, extension } = stringify(tree);
-
-              writeChapterContent({
-                params: chapterParams,
-                baseDir: handler.outputDir || this.outputFileDir,
-                content,
-                extension,
-                documentTitle: metadata.title,
-                getFileName: handler.getFileName,
-              });
+                writeChapterContent({
+                  params: chapterParams,
+                  baseDir: handler.outputDir || this.outputFileDir,
+                  content,
+                  extension,
+                  documentTitle: metadata.title,
+                  getFileName: handler.getFileName,
+                });
+              }
             }
 
             // eslint-disable-next-line no-restricted-syntax
             for await (const extraFn of extraContentFnArr) {
               try {
-                await withBluebirdTimeout(
+                await withTimeout(
                   () =>
                     extraFn({
                       resourceHref: { href, props },
@@ -499,14 +502,25 @@ class Crawler {
                 );
               } catch (error) {
                 subtaskSuccessful = false;
+
+                const errorPayload = (() => {
+                  if (error instanceof ZodError) return z.prettifyError(error);
+                  if (error instanceof Error) {
+                    return {
+                      name: error.name,
+                      message: error.message,
+                      stack: error.stack,
+                    };
+                  }
+
+                  return error;
+                })();
+
                 logger.error(
                   `Error getting extra content for chapter ${props?.chapterNumber} of document ${metadata.documentId}:`,
                   {
                     href,
-                    error:
-                      error instanceof ZodError
-                        ? z.prettifyError(error)
-                        : error,
+                    error: errorPayload,
                   },
                 );
               }
@@ -534,25 +548,28 @@ class Crawler {
           try {
             // eslint-disable-next-line no-restricted-syntax
             for await (const getPageContentMdHandlerFn of getPageContentMdHandler) {
-              const mdContent = await withBluebirdTimeout(
-                () =>
-                  getPageContentMdHandlerFn.inputFn({
-                    resourceHref: { href, props },
-                    chapterParams,
-                    metadata,
-                  }),
-                this.timeout,
-              );
+              const mdInputFn = getPageContentMdHandlerFn.inputFn;
+              if (mdInputFn) {
+                const mdContent = await withTimeout(
+                  () =>
+                    mdInputFn({
+                      resourceHref: { href, props },
+                      chapterParams,
+                      metadata,
+                    }),
+                  this.timeout,
+                );
 
-              writeChapterContent({
-                params: chapterParams,
-                baseDir:
-                  getPageContentMdHandlerFn.outputDir || this.outputFileDir,
-                content: mdContent,
-                extension: 'md',
-                documentTitle: metadata.title,
-                getFileName: getPageContentMdHandlerFn.getFileName,
-              });
+                writeChapterContent({
+                  params: chapterParams,
+                  baseDir:
+                    getPageContentMdHandlerFn.outputDir || this.outputFileDir,
+                  content: mdContent,
+                  extension: 'md',
+                  documentTitle: metadata.title,
+                  getFileName: getPageContentMdHandlerFn.getFileName,
+                });
+              }
             }
           } catch (error) {
             subtaskSuccessful = false;

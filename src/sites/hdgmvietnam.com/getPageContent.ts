@@ -2,7 +2,6 @@
 /* eslint-disable no-continue */
 import retry from 'async-retry';
 import { type Page, chromium, devices } from 'playwright';
-import Bluebird from '@/lib/bluebird';
 import { type GetPageContentFunction } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
 import { getLogContext, logWarn } from '@/lib/crawler/logUtils';
@@ -92,182 +91,172 @@ const extractFootnoteRef = async (
   };
 };
 
-const getPageContent = (({ resourceHref, chapterParams }) => {
-  return new Bluebird.Promise(async (resolve, reject, onCancel) => {
-    const { href } = resourceHref;
+const getPageContent: GetPageContentFunction = async ({
+  resourceHref,
+  chapterParams,
+}) => {
+  const { href } = resourceHref;
 
-    const browser = await chromium.launch();
-    const context = await browser.newContext(devices['Desktop Chrome']);
-    const page = await context.newPage();
+  const browser = await chromium.launch();
+  const context = await browser.newContext(devices['Desktop Chrome']);
+  const page = await context.newPage();
 
-    try {
-      // Set up cancellation handler after resources are created
-      onCancel!(async () => {
-        await context.close();
-        await browser.close();
+  try {
+    await retry(
+      async () => {
+        await page.goto(href);
+      },
+      {
+        retries: 5,
+      },
+    );
 
-        reject(new Error('Operation was cancelled'));
+    await page.evaluate(() => {
+      // NOTE: Remove table element although remark-gfm still can parse it
+      document.querySelectorAll('table').forEach((el) => el.remove());
+    });
+
+    const { footnoteRefs, newString } = await extractFootnoteRef(page);
+
+    await context.close();
+    await browser.close();
+
+    const md = await parseMd(newString);
+
+    // NOTE: Footnote may have format: "[\[3\]](#footnote-link)" or
+    // "[**\[3\]**](#footnote-link)" or "[3](#footnote-link)"
+    const fnRegex =
+      /\[[^\\[]*(\\\[)?(?<label>[^\\]*)(\\\])?[^\\\]]*\]\(([^)]*)\)/gm;
+
+    const cleanupMd = cleanupMdProcessor(md, [
+      removeMdImgs,
+      (str) =>
+        removeMdLinks(str, {
+          useLinkAsAlt: false,
+        }),
+      removeMdHr,
+      (str) => {
+        return str.replaceAll(fnRegex, (subStr, ...props) => {
+          // NOTE: Label is the second capturing group
+          const label = props[1];
+          return `[${label}]`;
+        });
+      },
+      // NOTE: Have to run first so the asterisk regex can match correctly
+      normalizeWhitespace,
+      normalizeAsterisk,
+      normalizeQuotes,
+      normalizeNumberBullet,
+      normalizeMd,
+      removeRedundantSpaces,
+    ]);
+
+    const paragraphs = splitParagraph(cleanupMd, {
+      headingAsParagraph: false,
+    });
+
+    const pageData = paragraphs.map((p, paragraphIdx) => {
+      const pageNumber = paragraphIdx + 1;
+
+      const paragraphId = getPageId({
+        ...chapterParams,
+        pageNumber,
       });
 
-      await retry(
-        async () => {
-          await page.goto(href);
-        },
-        {
-          retries: 5,
-        },
-      );
+      const paragraphHeadings = extractHeading(p);
 
-      await page.evaluate(() => {
-        // NOTE: Remove table element although remark-gfm still can parse it
-        document.querySelectorAll('table').forEach((el) => el.remove());
-      });
+      // NOTE: If there are any headings in the paragraph, we will remove them
+      p = removeAllHeading(p);
 
-      const { footnoteRefs, newString } = await extractFootnoteRef(page);
+      const stripParagraph = stripSymbols(p).trim();
 
-      await context.close();
-      await browser.close();
+      // NOTE: Have to split markdown paragraphs by `\\\n` from markdown before
+      // splitting sentences
+      const sentences = stripParagraph
+        .split('\\\n')
+        .flatMap((subP) => winkNLPInstance.readDoc(subP).sentences().out())
+        .filter((sentence) => {
+          // NOTE: Filter out empty sentences
+          return sentence.trim().length > 0;
+        })
+        .map((sentence) => {
+          const footnotes = extractFootnote(sentence).flatMap((fnPos) => {
+            const footnoteRef = footnoteRefs.find(
+              (fnText) => fnText.label === fnPos.label,
+            );
+            if (!footnoteRef) {
+              const logContext = getLogContext(
+                chapterParams,
+                undefined,
+                resourceHref.href,
+              );
+              logWarn(
+                `Footnote text not found for label: ${fnPos.label}`,
+                logContext,
+              );
 
-      const md = await parseMd(newString);
+              return [];
+            }
 
-      // NOTE: Footnote may have format: "[\[3\]](#footnote-link)" or
-      // "[**\[3\]**](#footnote-link)" or "[3](#footnote-link)"
-      const fnRegex =
-        /\[[^\\[]*(\\\[)?(?<label>[^\\]*)(\\\])?[^\\\]]*\]\(([^)]*)\)/gm;
-
-      const cleanupMd = cleanupMdProcessor(md, [
-        removeMdImgs,
-        (str) =>
-          removeMdLinks(str, {
-            useLinkAsAlt: false,
-          }),
-        removeMdHr,
-        (str) => {
-          return str.replaceAll(fnRegex, (subStr, ...props) => {
-            // NOTE: Label is the second capturing group
-            const label = props[1];
-            return `[${label}]`;
+            return [
+              {
+                ...footnoteRef,
+                text: stripSymbols(footnoteRef.text).trim(),
+                position: fnPos.position,
+              },
+            ];
           });
-        },
-        // NOTE: Have to run first so the asterisk regex can match correctly
-        normalizeWhitespace,
-        normalizeAsterisk,
-        normalizeQuotes,
-        normalizeNumberBullet,
-        normalizeMd,
-        removeRedundantSpaces,
-      ]);
 
-      const paragraphs = splitParagraph(cleanupMd, {
-        headingAsParagraph: false,
-      });
-
-      const pageData = paragraphs.map((p, paragraphIdx) => {
-        const pageNumber = paragraphIdx + 1;
-
-        const paragraphId = getPageId({
-          ...chapterParams,
-          pageNumber,
+          return {
+            type: 'single',
+            languageCode: 'V',
+            text: removeAllFootnote(sentence).trim(),
+            footnotes,
+          } satisfies Omit<SingleLanguageSentence, 'id' | 'footnotes'> & {
+            footnotes: Footnote[];
+          };
+        })
+        .filter((sentence) => {
+          // NOTE: Filter out sentences that are only footnotes
+          return sentence.text.length > 0;
+        })
+        .map((sentence, sentenceNumber) => {
+          const newSentenceId = getSentenceId({
+            ...chapterParams,
+            pageNumber,
+            sentenceNumber: sentenceNumber + 1,
+          });
+          return {
+            ...sentence,
+            id: newSentenceId,
+            footnotes: sentence.footnotes.map((fn, idx) => ({
+              ...fn,
+              order: idx,
+              sentenceId: newSentenceId,
+            })),
+            headings:
+              sentenceNumber === 0
+                ? paragraphHeadings.map((heading) => ({
+                    ...heading,
+                    text: stripSymbols(heading.text).trim(),
+                    sentenceId: newSentenceId,
+                  }))
+                : [],
+          } satisfies SingleLanguageSentence;
         });
 
-        const paragraphHeadings = extractHeading(p);
+      return {
+        id: paragraphId,
+        number: pageNumber,
+        sentences,
+      };
+    });
 
-        // NOTE: If there are any headings in the paragraph, we will remove them
-        p = removeAllHeading(p);
-
-        const stripParagraph = stripSymbols(p).trim();
-
-        // NOTE: Have to split markdown paragraphs by `\\\n` from markdown before
-        // splitting sentences
-        const sentences = stripParagraph
-          .split('\\\n')
-          .flatMap((subP) => winkNLPInstance.readDoc(subP).sentences().out())
-          .filter((sentence) => {
-            // NOTE: Filter out empty sentences
-            return sentence.trim().length > 0;
-          })
-          .map((sentence) => {
-            const footnotes = extractFootnote(sentence).flatMap((fnPos) => {
-              const footnoteRef = footnoteRefs.find(
-                (fnText) => fnText.label === fnPos.label,
-              );
-              if (!footnoteRef) {
-                const logContext = getLogContext(
-                  chapterParams,
-                  undefined,
-                  resourceHref.href,
-                );
-                logWarn(
-                  `Footnote text not found for label: ${fnPos.label}`,
-                  logContext,
-                );
-
-                return [];
-              }
-
-              return [
-                {
-                  ...footnoteRef,
-                  text: stripSymbols(footnoteRef.text).trim(),
-                  position: fnPos.position,
-                },
-              ];
-            });
-
-            return {
-              type: 'single',
-              languageCode: 'V',
-              text: removeAllFootnote(sentence).trim(),
-              footnotes,
-            } satisfies Omit<SingleLanguageSentence, 'id' | 'footnotes'> & {
-              footnotes: Footnote[];
-            };
-          })
-          .filter((sentence) => {
-            // NOTE: Filter out sentences that are only footnotes
-            return sentence.text.length > 0;
-          })
-          .map((sentence, sentenceNumber) => {
-            const newSentenceId = getSentenceId({
-              ...chapterParams,
-              pageNumber,
-              sentenceNumber: sentenceNumber + 1,
-            });
-            return {
-              ...sentence,
-              id: newSentenceId,
-              footnotes: sentence.footnotes.map((fn, idx) => ({
-                ...fn,
-                order: idx,
-                sentenceId: newSentenceId,
-              })),
-              headings:
-                sentenceNumber === 0
-                  ? paragraphHeadings.map((heading) => ({
-                      ...heading,
-                      text: stripSymbols(heading.text).trim(),
-                      sentenceId: newSentenceId,
-                    }))
-                  : [],
-            } satisfies SingleLanguageSentence;
-          });
-
-        return {
-          id: paragraphId,
-          number: pageNumber,
-          sentences,
-        };
-      });
-
-      resolve(pageData);
-    } catch (error) {
-      // Clean up resources on error
-      await context.close();
-      await browser.close();
-
-      reject(error);
-    }
-  });
-}) satisfies GetPageContentFunction;
+    return pageData;
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+};
 
 export { getPageContent };
