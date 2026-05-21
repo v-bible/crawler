@@ -10,7 +10,7 @@ import {
   getDefaultDocumentPath,
 } from '@/lib/crawler/fileUtils';
 import { filterChapterCheckpoint } from '@/lib/crawler/filterUtils';
-import { sortCheckpointAsc, sortCheckpointDesc } from '@/lib/crawler/sortUtils';
+import { sortCheckpointAsc } from '@/lib/crawler/sortUtils';
 import {
   generateCsvTree,
   generateJsonTree,
@@ -70,47 +70,11 @@ export const crawler = new Crawler({
   getChapters,
   getPageContentHandler: getPageContentHandlers,
   getPageContentMdHandler: getPageContentMdHandlers,
-});
-
-const crawler2 = new Crawler({
-  name: 'rongmotamhon.net - Desc',
-  domain: 'R',
-  subDomain: 'B',
-  checkpointFilePath: SHARED_CHECKPOINT_PATH,
-  logFilePath: LOG_FILE_PATH,
-  getMetadataList,
-  sortCheckpoint: sortCheckpointDesc,
-  filterCheckpoint: filterChapterCheckpoint,
-  getChapters,
-  getPageContentHandler: getPageContentHandlers,
-  getPageContentMdHandler: getPageContentMdHandlers,
-});
-
-const crawler3 = new Crawler({
-  name: 'rongmotamhon.net - Middle',
-  domain: 'R',
-  subDomain: 'B',
-  checkpointFilePath: SHARED_CHECKPOINT_PATH,
-  logFilePath: LOG_FILE_PATH,
-  getMetadataList,
-  sortCheckpoint: (a, b) => {
-    // Sort from middle outward (interleaved pattern)
-    const aManual = a.params.requiresManualCheck ? 1 : 0;
-    const bManual = b.params.requiresManualCheck ? 1 : 0;
-    if (aManual !== bManual) return aManual - bManual;
-
-    const aMid = Math.abs(a.params.documentNumber - 500);
-    const bMid = Math.abs(b.params.documentNumber - 500);
-    return aMid - bMid;
-  },
-  filterCheckpoint: filterChapterCheckpoint,
-  getChapters,
-  getPageContentHandler: getPageContentHandlers,
-  getPageContentMdHandler: getPageContentMdHandlers,
+  crawlerCount: 10,
 });
 
 const main = async () => {
-  await Promise.all([crawler.run(), crawler2.run(), crawler3.run()]);
+  await crawler.run();
 };
 
 // Run directly if this is the main module

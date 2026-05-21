@@ -1,8 +1,5 @@
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable no-continue */
-import { PlaywrightBlocker } from '@ghostery/adblocker-playwright';
-import retry from 'async-retry';
-import { chromium, devices } from 'playwright';
 import { type GetPageContentMdFunction } from '@/lib/crawler/crawler';
 import {
   cleanupMdProcessor,
@@ -17,47 +14,29 @@ import {
   removeRedundantSpaces,
 } from '@/lib/md/mdUtils';
 import { parseMd } from '@/lib/md/remark';
+import {
+  createRongMotamhonBrowserPage,
+  getReadmeContentHtml,
+  gotoWithRetry,
+} from '@/sites/rongmotamhon.net/browserUtils';
 
 const getPageContentMdVie: GetPageContentMdFunction = async ({
   resourceHref,
 }) => {
   const { href } = resourceHref;
 
-  const browser = await chromium.launch();
-  const context = await browser.newContext(devices['Desktop Chrome']);
-  const page = await context.newPage();
+  const { browser, context, page } = await createRongMotamhonBrowserPage({
+    blockAds: true,
+  });
 
   try {
-    await PlaywrightBlocker.fromPrebuiltAdsAndTracking(fetch).then(
-      (blocker) => {
-        blocker.enableBlockingInPage(page);
-      },
-    );
+    await gotoWithRetry(page, href);
 
-    await retry(
-      async () => {
-        await page.goto(href, {
-          waitUntil: 'domcontentloaded',
-          timeout: 5 * 36000,
-        });
-      },
-      {
-        retries: 5,
-      },
-    );
+    const bodyHtml = await getReadmeContentHtml(page);
 
-    const bodyLocator = page.locator('[id="readme"]');
-
-    if (!(await bodyLocator.count())) {
+    if (!bodyHtml.trim()) {
       return '';
     }
-
-    await bodyLocator.evaluate((el) => {
-      // NOTE: Remove first bold element which is the title
-      el.querySelector('b')?.firstChild?.remove();
-    });
-
-    const bodyHtml = await bodyLocator.innerHTML();
 
     const md = await parseMd(bodyHtml);
 

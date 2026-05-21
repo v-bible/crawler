@@ -1,12 +1,15 @@
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable no-continue */
-import { PlaywrightBlocker } from '@ghostery/adblocker-playwright';
 import retry from 'async-retry';
-import { chromium, devices } from 'playwright';
 import { type GetPageContentFunction } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
 import { LogContext, logError } from '@/lib/crawler/logUtils';
 import { type MultiLanguageSentence, type Page } from '@/lib/crawler/schema';
+import {
+  createRongMotamhonBrowserPage,
+  getReadmeContentHtml,
+  gotoWithRetry,
+} from '@/sites/rongmotamhon.net/browserUtils';
 
 const fetchHtmlContent = async (url: string) => {
   let group = 0;
@@ -37,7 +40,7 @@ const fetchHtmlContent = async (url: string) => {
         return res;
       },
       {
-        retries: 5,
+        retries: 500,
       },
     );
     if (!newContent || newContent.trim() === '') {
@@ -62,28 +65,12 @@ const getPageContent: GetPageContentFunction = async ({
 }) => {
   const { href } = resourceHref;
 
-  const browser = await chromium.launch();
-  const context = await browser.newContext(devices['Desktop Chrome']);
-  const page = await context.newPage();
+  const { browser, context, page } = await createRongMotamhonBrowserPage({
+    blockAds: true,
+  });
 
   try {
-    await PlaywrightBlocker.fromPrebuiltAdsAndTracking(fetch).then(
-      (blocker) => {
-        blocker.enableBlockingInPage(page);
-      },
-    );
-
-    await retry(
-      async () => {
-        await page.goto(href, {
-          waitUntil: 'domcontentloaded',
-          timeout: 5 * 36000,
-        });
-      },
-      {
-        retries: 5,
-      },
-    );
+    await gotoWithRetry(page, href);
 
     const chinesePageLink = await page
       .locator('a', {
@@ -102,17 +89,7 @@ const getPageContent: GetPageContentFunction = async ({
     let htmlBody = '';
 
     try {
-      await retry(
-        async () => {
-          await page.goto(chinesePageLink, {
-            waitUntil: 'domcontentloaded',
-            timeout: 5 * 36000,
-          });
-        },
-        {
-          retries: 5,
-        },
-      );
+      await gotoWithRetry(page, chinesePageLink);
 
       // NOTE: Get resource URL to pass to fetchHtmlContent to avoid issues with
       // referer when fetching from node
@@ -143,9 +120,19 @@ const getPageContent: GetPageContentFunction = async ({
       waitUntil: 'domcontentloaded',
     });
 
+    const readmeContentHtml = await getReadmeContentHtml(page);
+
+    if (!readmeContentHtml.trim()) {
+      throw new Error('Chinese content body not found');
+    }
+
     // Bulk scrape all character data at once using page.evaluate
-    const charactersData = await page.evaluate(() => {
-      const links = Array.from(document.querySelectorAll('a'));
+    const charactersData = await page.evaluate((contentHtml) => {
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = contentHtml;
+
+      const links = Array.from(wrapper.querySelectorAll('a'));
+
       return links
         .map((link, index, array) => {
           let chineseVietnameseCharacter =
@@ -188,7 +175,7 @@ const getPageContent: GetPageContentFunction = async ({
           };
         })
         .filter((item) => item.chineseCharacter !== ''); // Filter out any items that are completely empty
-    });
+    }, readmeContentHtml);
 
     // Process the scraped data to build sentences
     const sentences: MultiLanguageSentence[] = [];
