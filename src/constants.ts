@@ -32,4 +32,4 @@ export const DEFAULT_CHECKPOINT_FILE_PATH = path.join(
 );
 
 // Timeouts
-export const DEFAULT_CRAWL_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+export const DEFAULT_CRAWL_COUNT = 5;
