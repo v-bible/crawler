@@ -2,7 +2,8 @@
 /* eslint-disable no-continue */
 import retry from 'async-retry';
 import { chromium, devices } from 'playwright';
-import { type GetPageContentMdFunction } from '@/lib/crawler/crawler';
+import { type GetPageContentParams } from '@/lib/crawler/crawler';
+import { WorkerHandlerFn } from '@/lib/crawler/worker';
 import {
   cleanupMdProcessor,
   normalizeAsterisk,
@@ -17,7 +18,9 @@ import {
 } from '@/lib/md/mdUtils';
 import { parseMd } from '@/lib/md/remark';
 
-const getPageContentMd: GetPageContentMdFunction = async ({ resourceHref }) => {
+const getPageContentMd: WorkerHandlerFn<GetPageContentParams, string> = async ({
+  resourceHref,
+}) => {
   const { href } = resourceHref;
 
   const browser = await chromium.launch();

@@ -2,7 +2,9 @@ import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
 import { Crawler } from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
 import { filterNonChapterCheckpoint } from '@/lib/crawler/filterUtils';
-import { sortCheckpointAsc, sortCheckpointDesc } from '@/lib/crawler/sortUtils';
+import { sortCheckpointAsc } from '@/lib/crawler/sortUtils';
+import { stringifyJsonTree, stringifyXmlTree } from '@/lib/crawler/treeUtils';
+import { defineHandler } from '@/lib/crawler/worker';
 import { getPageContent } from '@/sites/thanhlinh.net/getPageContent';
 import { getPageContentMd } from '@/sites/thanhlinh.net/getPageContentMd';
 
@@ -10,14 +12,14 @@ export const crawler = new Crawler({
   name: 'thanhlinh.net',
   domain: 'R',
   subDomain: 'C',
-  getMetadataList: () => getMetadataFromCSV(DEFAULT_METADATA_FILE_PATH),
-  getMetadataBy: (metadataRow) => {
+  getMetadata: () => getMetadataFromCSV(DEFAULT_METADATA_FILE_PATH),
+  filterMetadata: (metadataRow) => {
     return (
       metadataRow.source === 'thanhlinh.net' && metadataRow.sourceType === 'web'
     );
   },
-  sortCheckpoint: sortCheckpointAsc,
-  filterCheckpoint: filterNonChapterCheckpoint,
+  sortCheckpointTask: sortCheckpointAsc,
+  filterCheckpointTask: filterNonChapterCheckpoint,
   getChapters: async ({ resourceHref }) => {
     // NOTE: These pages have no chapters
     return [
@@ -29,45 +31,39 @@ export const crawler = new Crawler({
       },
     ];
   },
-  getPageContentHandler: {
-    inputFn: getPageContent,
-  },
-  getPageContentMdHandler: {
-    inputFn: getPageContentMd,
-  },
-});
-
-const anotherCrawler = new Crawler({
-  name: 'thanhlinh.net - All',
-  domain: 'R',
-  subDomain: 'C',
-  getMetadataList: () => getMetadataFromCSV(DEFAULT_METADATA_FILE_PATH),
-  getMetadataBy: (metadataRow) => {
-    return metadataRow.source === 'thanhlinh.net';
-  },
-  sortCheckpoint: sortCheckpointDesc,
-  filterCheckpoint: () => true, // No filtering, process all checkpoints
-  getChapters: async ({ resourceHref }) => {
-    // NOTE: These pages have no chapters
-    return [
-      {
-        href: resourceHref.href,
-        props: {
-          chapterNumber: 1,
-        },
+  handlers: [
+    defineHandler({
+      handler: {
+        fn: getPageContent,
       },
-    ];
-  },
-  getPageContentHandler: {
-    inputFn: getPageContent,
-  },
-  getPageContentMdHandler: {
-    inputFn: getPageContentMd,
-  },
+      stringify: [
+        {
+          name: 'json',
+          fn: stringifyJsonTree,
+        },
+        {
+          name: 'xml',
+          fn: stringifyXmlTree,
+        },
+      ],
+    }),
+    defineHandler({
+      handler: { fn: getPageContentMd },
+      stringify: [
+        {
+          name: 'md',
+          fn: (content) => ({
+            content,
+            extension: 'md',
+          }),
+        },
+      ],
+    }),
+  ],
 });
 
 const main = async () => {
-  await Promise.all([crawler.run(), anotherCrawler.run()]);
+  await crawler.run();
 };
 
 // Run directly if this is the main module

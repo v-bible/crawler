@@ -1,18 +1,19 @@
 /* eslint-disable no-await-in-loop */
 import retry from 'async-retry';
 import { DEFAULT_OUTPUT_FILE_DIR } from '@/constants';
-import { type GetPageExtraContentFunction } from '@/lib/crawler/crawler';
+import { type GetPageContentParams } from '@/lib/crawler/crawler';
 import {
   getDefaultDocumentPath,
   writeChapterContentBuffer,
 } from '@/lib/crawler/fileUtils';
 import { getLogContext, logError, logInfo } from '@/lib/crawler/logUtils';
+import { type WorkerHandlerFn } from '@/lib/crawler/worker';
 import {
   createRongMotamhonBrowserPage,
   gotoWithRetry,
 } from '@/sites/rongmotamhon.net/browserUtils';
 
-const getPdf: GetPageExtraContentFunction = async ({
+const getPdf: WorkerHandlerFn<GetPageContentParams, void> = async ({
   resourceHref,
   chapterParams,
   metadata,

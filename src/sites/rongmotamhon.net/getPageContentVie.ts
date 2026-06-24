@@ -1,18 +1,21 @@
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable no-continue */
-import { type GetPageContentFunction } from '@/lib/crawler/crawler';
+import { type GetPageContentParams } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
-import { type SingleLanguageSentence } from '@/lib/crawler/schema';
+import { type Page, type SingleLanguageSentence } from '@/lib/crawler/schema';
+import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
+import { pageToChapterTree } from '@/lib/crawler/treeUtils';
+import { type WorkerHandlerFn } from '@/lib/crawler/worker';
 import {
   createRongMotamhonBrowserPage,
   getReadmeContentHtml,
   gotoWithRetry,
 } from '@/sites/rongmotamhon.net/browserUtils';
 
-const getPageContentVie: GetPageContentFunction = async ({
-  resourceHref,
-  chapterParams,
-}) => {
+const getPageContentVie: WorkerHandlerFn<
+  GetPageContentParams,
+  ChapterTreeOutput
+> = async ({ resourceHref, chapterParams, metadata }) => {
   const { href } = resourceHref;
 
   const { browser, context, page } = await createRongMotamhonBrowserPage({
@@ -25,7 +28,7 @@ const getPageContentVie: GetPageContentFunction = async ({
     const readmeContentHtml = await getReadmeContentHtml(page);
 
     if (!readmeContentHtml.trim()) {
-      return [];
+      return pageToChapterTree([], chapterParams, metadata);
     }
 
     const bodyContent = await page.evaluate((contentHtml) => {
@@ -56,13 +59,15 @@ const getPageContentVie: GetPageContentFunction = async ({
           return sentence;
         }) || [];
 
-    return [
+    const pageData = [
       {
         id: getPageId({ ...chapterParams, pageNumber: 1 }),
         number: 1,
         sentences,
       },
-    ];
+    ] satisfies Page[];
+
+    return pageToChapterTree(pageData, chapterParams, metadata);
   } finally {
     await context.close();
     await browser.close();

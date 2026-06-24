@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable no-continue */
-import { type GetPageContentMdFunction } from '@/lib/crawler/crawler';
+import { type GetPageContentParams } from '@/lib/crawler/crawler';
+import { type WorkerHandlerFn } from '@/lib/crawler/worker';
 import {
   cleanupMdProcessor,
   normalizeAsterisk,
@@ -20,9 +21,10 @@ import {
   gotoWithRetry,
 } from '@/sites/rongmotamhon.net/browserUtils';
 
-const getPageContentMdVie: GetPageContentMdFunction = async ({
-  resourceHref,
-}) => {
+const getPageContentMdVie: WorkerHandlerFn<
+  GetPageContentParams,
+  string
+> = async ({ resourceHref }) => {
   const { href } = resourceHref;
 
   const { browser, context, page } = await createRongMotamhonBrowserPage({

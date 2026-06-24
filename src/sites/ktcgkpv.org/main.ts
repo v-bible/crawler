@@ -2,6 +2,8 @@ import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
 import { Crawler } from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
 import { sortCheckpointAsc } from '@/lib/crawler/sortUtils';
+import { stringifyJsonTree, stringifyXmlTree } from '@/lib/crawler/treeUtils';
+import { defineHandler } from '@/lib/crawler/worker';
 import { getChapters } from '@/sites/ktcgkpv.org/getChapters';
 import { getPageContent } from '@/sites/ktcgkpv.org/getPageContent';
 
@@ -9,29 +11,43 @@ export const crawler = new Crawler({
   name: 'ktcgkpv.org',
   domain: 'R',
   subDomain: 'C',
-  getMetadataList: () => getMetadataFromCSV(DEFAULT_METADATA_FILE_PATH),
-  getMetadataBy: (metadataRow) => {
+  getMetadata: () => getMetadataFromCSV(DEFAULT_METADATA_FILE_PATH),
+  filterMetadata: (metadataRow) => {
     return (
       metadataRow.source === 'ktcgkpv.org' && metadataRow.sourceType === 'web'
     );
   },
-  sortCheckpoint: sortCheckpointAsc,
+  sortCheckpointTask: sortCheckpointAsc,
   getChapters,
-  getPageContentHandler: {
-    inputFn: getPageContent,
-  },
-  getPageContentMdHandler: [
-    {
-      inputFn: async ({ resourceHref }) => {
-        if (!resourceHref.props?.mdHref) {
-          throw new Error('MD href is not provided');
-        }
-
-        const md = await (await fetch(resourceHref.props.mdHref)).text();
-
-        return md;
+  handlers: [
+    defineHandler({
+      handler: {
+        fn: getPageContent,
       },
-    },
+      stringify: [
+        {
+          name: 'json',
+          fn: stringifyJsonTree,
+        },
+        {
+          name: 'xml',
+          fn: stringifyXmlTree,
+        },
+      ],
+    }),
+    defineHandler({
+      handler: {
+        fn: async ({ resourceHref }) => {
+          if (!resourceHref.props?.mdHref) {
+            throw new Error('MD href is not provided');
+          }
+
+          const md = await (await fetch(resourceHref.props.mdHref)).text();
+
+          return md;
+        },
+      },
+    }),
   ],
 });
 

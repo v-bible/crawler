@@ -1,10 +1,12 @@
 /* eslint-disable no-restricted-syntax */
-/* eslint-disable no-continue */
 import retry from 'async-retry';
-import { type GetPageContentFunction } from '@/lib/crawler/crawler';
+import { type GetPageContentParams } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
-import { LogContext, logError } from '@/lib/crawler/logUtils';
+import { type LogContext, logError } from '@/lib/crawler/logUtils';
 import { type MultiLanguageSentence, type Page } from '@/lib/crawler/schema';
+import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
+import { pageToChapterTree } from '@/lib/crawler/treeUtils';
+import { type WorkerHandlerFn } from '@/lib/crawler/worker';
 import {
   createRongMotamhonBrowserPage,
   getReadmeContentHtml,
@@ -59,10 +61,10 @@ const fetchHtmlContent = async (url: string) => {
   return content;
 };
 
-const getPageContent: GetPageContentFunction = async ({
-  resourceHref,
-  chapterParams,
-}) => {
+const getPageContent: WorkerHandlerFn<
+  GetPageContentParams,
+  ChapterTreeOutput
+> = async ({ resourceHref, chapterParams, metadata }) => {
   const { href } = resourceHref;
 
   const { browser, context, page } = await createRongMotamhonBrowserPage({
@@ -229,7 +231,7 @@ const getPageContent: GetPageContentFunction = async ({
       }
     }
 
-    return [
+    const pageData = [
       {
         id: getPageId({
           chapterNumber: chapterParams.chapterNumber,
@@ -242,7 +244,9 @@ const getPageContent: GetPageContentFunction = async ({
         number: 1,
         sentences,
       },
-    ] as Page[];
+    ] satisfies Page[];
+
+    return pageToChapterTree(pageData, chapterParams, metadata);
   } finally {
     await context.close();
     await browser.close();

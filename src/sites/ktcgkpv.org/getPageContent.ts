@@ -1,6 +1,5 @@
 import { groupBy } from 'es-toolkit';
-
-import { type GetPageContentFunction } from '@/lib/crawler/crawler';
+import { type GetPageContentParams } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
 import { getLogContext, logWarn } from '@/lib/crawler/logUtils';
 import {
@@ -9,6 +8,9 @@ import {
   type Page,
   type SingleLanguageSentence,
 } from '@/lib/crawler/schema';
+import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
+import { pageToChapterTree } from '@/lib/crawler/treeUtils';
+import { type WorkerHandlerFn } from '@/lib/crawler/worker';
 import {
   extractFootnote,
   injectFootnote,
@@ -26,10 +28,10 @@ import {
 } from '@/lib/md/mdUtils';
 import { winkNLPInstance } from '@/lib/wink-nlp';
 
-const getPageContent: GetPageContentFunction = async ({
-  resourceHref,
-  chapterParams,
-}) => {
+const getPageContent: WorkerHandlerFn<
+  GetPageContentParams,
+  ChapterTreeOutput
+> = async ({ resourceHref, chapterParams, metadata }) => {
   const {
     verses,
     marks: footnotes = [],
@@ -233,7 +235,7 @@ const getPageContent: GetPageContentFunction = async ({
     } satisfies Page;
   });
 
-  return pageData;
+  return pageToChapterTree(pageData, chapterParams, metadata);
 };
 
 export { getPageContent };
