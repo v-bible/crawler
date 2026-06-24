@@ -3,6 +3,8 @@ import { Crawler } from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
 import { filterNonChapterCheckpoint } from '@/lib/crawler/filterUtils';
 import { sortCheckpointAsc } from '@/lib/crawler/sortUtils';
+import { stringifyJsonTree, stringifyXmlTree } from '@/lib/crawler/treeUtils';
+import { defineHandler } from '@/lib/crawler/worker';
 import { getPageContent } from '@/sites/hdgmvietnam.com/getPageContent';
 import { getPageContentMd } from '@/sites/hdgmvietnam.com/getPageContentMd';
 
@@ -10,15 +12,15 @@ export const crawler = new Crawler({
   name: 'hdgmvietnam.com',
   domain: 'R',
   subDomain: 'C',
-  getMetadataList: () => getMetadataFromCSV(DEFAULT_METADATA_FILE_PATH),
-  getMetadataBy: (metadataRow) => {
+  getMetadata: () => getMetadataFromCSV(DEFAULT_METADATA_FILE_PATH),
+  filterMetadata: (metadataRow) => {
     return (
       metadataRow.source === 'hdgmvietnam.com' &&
       metadataRow.sourceType === 'web'
     );
   },
-  sortCheckpoint: sortCheckpointAsc,
-  filterCheckpoint: filterNonChapterCheckpoint,
+  sortCheckpointTask: sortCheckpointAsc,
+  filterCheckpointTask: filterNonChapterCheckpoint,
   getChapters: async ({ resourceHref }) => {
     // NOTE: These pages have no chapters
     return [
@@ -30,12 +32,35 @@ export const crawler = new Crawler({
       },
     ];
   },
-  getPageContentHandler: {
-    inputFn: getPageContent,
-  },
-  getPageContentMdHandler: {
-    inputFn: getPageContentMd,
-  },
+  handlers: [
+    defineHandler({
+      handler: {
+        fn: getPageContent,
+      },
+      stringify: [
+        {
+          name: 'json',
+          fn: stringifyJsonTree,
+        },
+        {
+          name: 'xml',
+          fn: stringifyXmlTree,
+        },
+      ],
+    }),
+    defineHandler({
+      handler: { fn: getPageContentMd },
+      stringify: [
+        {
+          name: 'md',
+          fn: (content) => ({
+            content,
+            extension: 'md',
+          }),
+        },
+      ],
+    }),
+  ],
 });
 
 const main = async () => {

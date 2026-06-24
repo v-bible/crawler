@@ -1,53 +1,41 @@
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable no-continue */
-import { PlaywrightBlocker } from '@ghostery/adblocker-playwright';
-import retry from 'async-retry';
-import { chromium, devices } from 'playwright';
-import { type GetPageContentFunction } from '@/lib/crawler/crawler';
+import { type GetPageContentParams } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
-import { type SingleLanguageSentence } from '@/lib/crawler/schema';
+import { type Page, type SingleLanguageSentence } from '@/lib/crawler/schema';
+import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
+import { pageToChapterTree } from '@/lib/crawler/treeUtils';
+import { type WorkerHandlerFn } from '@/lib/crawler/worker';
+import {
+  createRongMotamhonBrowserPage,
+  getReadmeContentHtml,
+  gotoWithRetry,
+} from '@/sites/rongmotamhon.net/browserUtils';
 
-const getPageContentVie: GetPageContentFunction = async ({
-  resourceHref,
-  chapterParams,
-}) => {
+const getPageContentVie: WorkerHandlerFn<
+  GetPageContentParams,
+  ChapterTreeOutput
+> = async ({ resourceHref, chapterParams, metadata }) => {
   const { href } = resourceHref;
 
-  const browser = await chromium.launch();
-  const context = await browser.newContext(devices['Desktop Chrome']);
-  const page = await context.newPage();
+  const { browser, context, page } = await createRongMotamhonBrowserPage({
+    blockAds: true,
+  });
 
   try {
-    await PlaywrightBlocker.fromPrebuiltAdsAndTracking(fetch).then(
-      (blocker) => {
-        blocker.enableBlockingInPage(page);
-      },
-    );
+    await gotoWithRetry(page, href);
 
-    await retry(
-      async () => {
-        await page.goto(href, {
-          waitUntil: 'domcontentloaded',
-          timeout: 5 * 36000,
-        });
-      },
-      {
-        retries: 5,
-      },
-    );
+    const readmeContentHtml = await getReadmeContentHtml(page);
 
-    const bodyLocator = page.locator('[id="readme"]');
-
-    if (!(await bodyLocator.count())) {
-      return [];
+    if (!readmeContentHtml.trim()) {
+      return pageToChapterTree([], chapterParams, metadata);
     }
 
-    await bodyLocator.evaluate((el) => {
-      // NOTE: Remove first bold element which is the title
-      el.querySelector('b')?.firstChild?.remove();
-    });
-
-    const bodyContent = await bodyLocator.textContent();
+    const bodyContent = await page.evaluate((contentHtml) => {
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = contentHtml;
+      return wrapper.textContent || '';
+    }, readmeContentHtml);
 
     const sentences =
       bodyContent
@@ -71,13 +59,15 @@ const getPageContentVie: GetPageContentFunction = async ({
           return sentence;
         }) || [];
 
-    return [
+    const pageData = [
       {
         id: getPageId({ ...chapterParams, pageNumber: 1 }),
         number: 1,
         sentences,
       },
-    ];
+    ] satisfies Page[];
+
+    return pageToChapterTree(pageData, chapterParams, metadata);
   } finally {
     await context.close();
     await browser.close();

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import * as lockfile from 'proper-lockfile';
+import { type Logger } from 'winston';
 import { DEFAULT_CHECKPOINT_FILE_PATH } from '@/constants';
 import {
   readCheckpointFile,
@@ -9,61 +10,71 @@ import {
 import { logger } from '@/logger/logger';
 
 export type Checkpoint<
-  T extends Record<string, unknown>,
-  K extends Record<string, unknown> = Record<string, unknown>,
+  TTask extends Record<string, unknown>,
+  TSubtask extends Record<string, unknown> = Record<string, unknown>,
 > = {
   id: string;
   completed: boolean;
-  params: T;
-  subtasks?: Checkpoint<K, never>[] | null;
+  params: TTask;
+  subtasks: Checkpoint<TSubtask, never>[] | null;
 };
 
-export type WithCheckpointOptions<T extends Record<string, unknown>> = {
+export type WithCheckpointOptions<TTask extends Record<string, unknown>> = {
   // NOTE: If true, will return all checkpoints regardless of completion
   // status
   forceAll?: boolean;
   // NOTE: If provided, will return only checkpoints with these ids
-  forceCheckpointId?: Checkpoint<T>['id'][];
+  forceCheckpointId?: Checkpoint<TTask>['id'][];
 };
 
 export type WithCheckpointParams<
-  T extends Record<string, unknown>,
-  K extends Record<string, unknown>,
+  TTask extends Record<string, unknown>,
+  TSubtask extends Record<string, unknown>,
 > = {
-  getInitialData: () => Promise<T[]>;
-  getSubtaskData?: (parent: Checkpoint<T, K>) => Promise<K[]>;
-  getCheckpointId: (item: T) => string;
-  filterCheckpoint: (data: Checkpoint<T, K>) => boolean;
-  sortCheckpoint?: (a: Checkpoint<T, K>, b: Checkpoint<T, K>) => number;
-  getSubtaskId?: (parent: Checkpoint<T, K>, subtask: K) => string;
-  filterSubtasks?: (data: Checkpoint<K, never>) => boolean;
-  sortSubtasks?: (a: Checkpoint<K, never>, b: Checkpoint<K, never>) => number;
+  getInitialData: () => Promise<TTask[]>;
+  getSubtaskData?: (parent: Checkpoint<TTask, TSubtask>) => Promise<TSubtask[]>;
+  getCheckpointId: (item: TTask) => string;
+  filterCheckpoint: (data: Checkpoint<TTask, TSubtask>) => boolean;
+  sortCheckpoint?: (
+    a: Checkpoint<TTask, TSubtask>,
+    b: Checkpoint<TTask, TSubtask>,
+  ) => number;
+  getSubtaskId?: (
+    parent: Checkpoint<TTask, TSubtask>,
+    subtask: TSubtask,
+  ) => string;
+  filterSubtasks?: (data: Checkpoint<TSubtask, never>) => boolean;
+  sortSubtasks?: (
+    a: Checkpoint<TSubtask, never>,
+    b: Checkpoint<TSubtask, never>,
+  ) => number;
   skipCheckpointCheck?: boolean;
   skipSubtaskCheckpointCheck?: boolean;
-  filePath?: string;
-  options?: WithCheckpointOptions<T>;
+  checkpointFilePath?: string;
+  options?: WithCheckpointOptions<TTask>;
+  log?: Logger;
 };
 
 export type WithCheckpointReturn<
-  T extends Record<string, unknown>,
-  K extends Record<string, unknown>,
+  TTask extends Record<string, unknown>,
+  TSubtask extends Record<string, unknown>,
 > = {
-  filteredCheckpoint: Checkpoint<T, K>[];
-  getAllCheckpoint: () => Checkpoint<T, K>[];
+  filteredCheckpoint: Checkpoint<TTask, TSubtask>[];
+  getAllCheckpoint: () => Checkpoint<TTask, TSubtask>[];
   setCheckpointComplete: (
-    checkpointId: Checkpoint<T, K>['id'],
-    completed: Checkpoint<T, K>['completed'],
+    checkpointId: Checkpoint<TTask, TSubtask>['id'],
+    completed: Checkpoint<TTask, TSubtask>['completed'],
   ) => void;
   setSubtaskComplete: (
-    parentId: Checkpoint<T, K>['id'],
-    subtaskId: Checkpoint<T, K>['id'],
-    completed: Checkpoint<T, K>['completed'],
+    parentId: Checkpoint<TTask, TSubtask>['id'],
+    subtaskId: Checkpoint<TTask, TSubtask>['id'],
+    completed: Checkpoint<TTask, TSubtask>['completed'],
   ) => void;
 };
 
 const withCheckpoint = async <
-  T extends Record<string, unknown>,
-  K extends Record<string, unknown>,
+  TTask extends Record<string, unknown>,
+  TSubtask extends Record<string, unknown>,
 >({
   getInitialData,
   // NOTE: Function to set the checkpoint id based on the data
@@ -76,10 +87,15 @@ const withCheckpoint = async <
   sortSubtasks,
   skipCheckpointCheck = false,
   skipSubtaskCheckpointCheck = false,
-  filePath = DEFAULT_CHECKPOINT_FILE_PATH,
+  checkpointFilePath: filePath = DEFAULT_CHECKPOINT_FILE_PATH,
   options,
-}: WithCheckpointParams<T, K>): Promise<WithCheckpointReturn<T, K>> => {
+  log,
+}: WithCheckpointParams<TTask, TSubtask>): Promise<
+  WithCheckpointReturn<TTask, TSubtask>
+> => {
   const { forceAll = false, forceCheckpointId = [] } = options || {};
+
+  log = log || logger;
 
   // NOTE: Open file to try to read, if not exists, create it with empty array
   try {
@@ -95,12 +111,12 @@ const withCheckpoint = async <
     writeFileSync(filePath, '[]', 'utf-8');
   }
 
-  const savedCheckpoint = await readCheckpointFile<T, K>(filePath);
+  const savedCheckpoint = await readCheckpointFile<TTask, TSubtask>(filePath);
 
   if (!skipCheckpointCheck || savedCheckpoint?.length === 0) {
     // eslint-disable-next-line no-restricted-syntax
     for await (const item of await getInitialData()) {
-      const checkpoint: Checkpoint<T, K> = {
+      const checkpoint: Checkpoint<TTask, TSubtask> = {
         id: getCheckpointId(item),
         params: item,
         completed: false,
@@ -114,7 +130,7 @@ const withCheckpoint = async <
   }
 
   if (getSubtaskData && getSubtaskId) {
-    const newCheckpoints: Checkpoint<T, K>[] = [];
+    const newCheckpoints: Checkpoint<TTask, TSubtask>[] = [];
 
     // eslint-disable-next-line no-restricted-syntax
     for await (const checkpoint of savedCheckpoint) {
@@ -132,7 +148,8 @@ const withCheckpoint = async <
           id: getSubtaskId(checkpoint, subtaskItem),
           params: subtaskItem,
           completed: false,
-        } satisfies Checkpoint<K>;
+          subtasks: null,
+        } satisfies Checkpoint<TSubtask>;
       });
 
       checkpoint.subtasks = subtasks;
@@ -141,7 +158,7 @@ const withCheckpoint = async <
     }
 
     // Re-read the entire checkpoint file with lock, update it, and write back
-    const allCheckpoints = await readCheckpointFile<T, K>(filePath);
+    const allCheckpoints = await readCheckpointFile<TTask, TSubtask>(filePath);
 
     // Update only the checkpoints that we processed
     newCheckpoints.forEach((newCheckpoint) => {
@@ -154,7 +171,7 @@ const withCheckpoint = async <
     await writeCheckpointFile(filePath, allCheckpoints);
   }
 
-  let filteredCheckpoint: Checkpoint<T, K>[] = [];
+  let filteredCheckpoint: Checkpoint<TTask, TSubtask>[] = [];
 
   if (forceAll) {
     filteredCheckpoint = savedCheckpoint;
@@ -176,7 +193,7 @@ const withCheckpoint = async <
 
   // eslint-disable-next-line no-restricted-syntax
   for await (const checkpoint of filteredCheckpoint) {
-    let filteredSubtasks: Checkpoint<K>[] = [];
+    let filteredSubtasks: Checkpoint<TSubtask>[] = [];
 
     if (!checkpoint.subtasks || checkpoint.subtasks === null) {
       // eslint-disable-next-line no-continue
@@ -209,7 +226,7 @@ const withCheckpoint = async <
           const checkpointFileData = readFileSync(filePath, 'utf-8');
           const currentCheckpoint = JSON.parse(
             checkpointFileData || '[]',
-          ) as Checkpoint<T, K>[];
+          ) as Checkpoint<TTask, TSubtask>[];
 
           const idx = currentCheckpoint.findIndex(
             (checkpoint) => checkpointId === checkpoint.id,
@@ -224,7 +241,7 @@ const withCheckpoint = async <
               'utf-8',
             );
           } else {
-            logger.error(
+            log.error(
               `Checkpoint with id ${checkpointId} not found in saved checkpoints.`,
             );
           }
@@ -232,7 +249,7 @@ const withCheckpoint = async <
           lockfile.unlockSync(filePath);
         }
       } catch (error) {
-        logger.error('Error in setCheckpointComplete:', error);
+        log.error('Error in setCheckpointComplete:', error);
       }
     },
     setSubtaskComplete: (parentId, subtaskId, completed) => {
@@ -244,7 +261,7 @@ const withCheckpoint = async <
           const checkpointFileData = readFileSync(filePath, 'utf-8');
           const currentCheckpoint = JSON.parse(
             checkpointFileData || '[]',
-          ) as Checkpoint<T, K>[];
+          ) as Checkpoint<TTask, TSubtask>[];
 
           const parentIdx = currentCheckpoint.findIndex(
             (checkpoint) => parentId === checkpoint.id,
@@ -278,12 +295,12 @@ const withCheckpoint = async <
                 'utf-8',
               );
             } else {
-              logger.error(
+              log.error(
                 `Subtask with id ${subtaskId} not found in parent checkpoint ${parentId}.`,
               );
             }
           } else {
-            logger.error(
+            log.error(
               `Parent checkpoint with id ${parentId} not found in saved checkpoints.`,
             );
           }
@@ -291,7 +308,7 @@ const withCheckpoint = async <
           lockfile.unlockSync(filePath);
         }
       } catch (error) {
-        logger.error('Error in setSubtaskComplete:', error);
+        log.error('Error in setSubtaskComplete:', error);
       }
     },
   };

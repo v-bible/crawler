@@ -1,21 +1,14 @@
-import path from 'path';
-import { DEFAULT_CHECKPOINT_DIR } from '@/constants';
 import { Crawler } from '@/lib/crawler/crawler';
+import { defineHandler } from '@/lib/crawler/worker';
 import { getCatechismBook } from '@/sites/tgpsaigon.net/getCatechismBook';
 import { getMetadataList } from '@/sites/tgpsaigon.net/getMetadataList';
-
-const CHECKPOINT_FILE_PATH = path.join(
-  DEFAULT_CHECKPOINT_DIR,
-  'RC-tgpsaigon.net-catechism-checkpoint.json',
-);
 
 export const crawler = new Crawler({
   name: 'tgpsaigon.net',
   domain: 'R',
   subDomain: 'C',
-  checkpointFilePath: CHECKPOINT_FILE_PATH,
-  getMetadataList,
-  getMetadataBy: (metadataRow) => {
+  getMetadata: getMetadataList,
+  filterMetadata: (metadataRow) => {
     return (
       metadataRow.source === 'tgpsaigon.net' && metadataRow.sourceType === 'web'
     );
@@ -33,9 +26,13 @@ export const crawler = new Crawler({
       },
     ];
   },
-  getPageContentHandler: {
-    extraContentFn: getCatechismBook,
-  },
+  handlers: [
+    defineHandler({
+      handler: {
+        fn: getCatechismBook,
+      },
+    }),
+  ],
 });
 
 const main = async () => {

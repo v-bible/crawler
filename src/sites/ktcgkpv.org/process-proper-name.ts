@@ -12,8 +12,8 @@ import { type Footnote, type GenreParams } from '@/lib/crawler/schema';
 import { ChapterTreeSchema } from '@/lib/crawler/treeSchema';
 import {
   generateDataTreeWithAnnotation,
-  generateJsonTree,
-  generateXmlTree,
+  stringifyJsonTree,
+  stringifyXmlTree,
 } from '@/lib/crawler/treeUtils';
 import { updateAnnotations } from '@/lib/ner/nerUtils';
 import { type SentenceEntityAnnotation } from '@/lib/ner/schema';
@@ -166,7 +166,7 @@ const main = () => {
     const newTree = updateAnnotations(treeData, newAnnotations);
 
     // NOTE: We don't need to wrap NER label in sentence for json tree
-    const { content: jsonTree } = generateJsonTree(newTree);
+    const { content: jsonTree } = stringifyJsonTree(newTree);
 
     const treeWithAnnotation = generateDataTreeWithAnnotation({
       chapterParams,
@@ -177,7 +177,7 @@ const main = () => {
       annotations: newAnnotations,
     });
 
-    const { content: xmlTree } = generateXmlTree(treeWithAnnotation);
+    const { content: xmlTree } = stringifyXmlTree(treeWithAnnotation);
 
     writeChapterContent({
       params: chapterParams,

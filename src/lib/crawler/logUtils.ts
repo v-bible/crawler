@@ -1,8 +1,10 @@
+/* eslint-disable no-continue */
+/* eslint-disable no-restricted-syntax */
 /**
  * Logging utilities with structured metadata for tracing and error recovery
  */
 
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { type ChapterParams } from '@/lib/crawler/schema';
 import { logger } from '@/logger/logger';
 
@@ -29,7 +31,9 @@ export function getLogContext(
   resourceHref?: string,
 ): LogContext {
   return {
-    documentId: `${chapterParams.domain}${chapterParams.subDomain}${chapterParams.genre}_${String(chapterParams.documentNumber).padStart(3, '0')}`,
+    documentId: `${chapterParams.domain}${chapterParams.subDomain}${chapterParams.genre}_${String(
+      chapterParams.documentNumber,
+    ).padStart(3, '0')}`,
     chapterNumber: chapterParams.chapterNumber,
     chapterName: chapterParams.chapterName,
     resourceHref,
@@ -80,24 +84,35 @@ export type LogError = {
   chapterNumber?: number;
   resourceHref?: string;
   error?: string;
+  runId?: string;
 };
 
 /**
- * Parse log file and extract errors with context
+ * Parse log file and extract errors with context. If `runId` is provided,
+ * only errors from that run are returned.
  */
-export function parseLogErrors(logFilePath: string): LogError[] {
+export function parseLogErrors(
+  logFilePath: string,
+  runId?: string,
+): LogError[] {
   const errors: LogError[] = [];
 
   try {
+    if (!existsSync(logFilePath)) return errors;
+
     const logContent = readFileSync(logFilePath, 'utf-8');
     const lines = logContent.split('\n').filter((line) => line.trim());
 
-    // eslint-disable-next-line no-restricted-syntax
     for (const line of lines) {
       try {
         const entry = JSON.parse(line);
 
         if (entry.level === 'error') {
+          if (runId && entry.runId && entry.runId !== runId) {
+            // not from requested run, skip
+            continue;
+          }
+
           errors.push({
             timestamp: entry.timestamp,
             message: entry.message,
@@ -105,10 +120,11 @@ export function parseLogErrors(logFilePath: string): LogError[] {
             chapterNumber: entry.chapterNumber,
             resourceHref: entry.resourceHref,
             error: entry.error,
+            runId: entry.runId,
           });
         }
-      } catch (e) {
-        // Skip invalid JSON lines
+      } catch {
+        // ignore malformed lines
       }
     }
   } catch (error) {
@@ -126,14 +142,10 @@ export function groupErrorsByDocument(
 ): Map<string, LogError[]> {
   const grouped = new Map<string, LogError[]>();
 
-  // eslint-disable-next-line no-restricted-syntax
-  for (const error of errors) {
-    if (error.documentId) {
-      if (!grouped.has(error.documentId)) {
-        grouped.set(error.documentId, []);
-      }
-      grouped.get(error.documentId)!.push(error);
-    }
+  for (const err of errors) {
+    if (!err.documentId) continue;
+    if (!grouped.has(err.documentId)) grouped.set(err.documentId, []);
+    grouped.get(err.documentId)!.push(err);
   }
 
   return grouped;
@@ -147,16 +159,12 @@ export function extractFailedCheckpoints(
 ): Map<string, Set<number>> {
   const needsRecrawl = new Map<string, Set<number>>();
 
-  // eslint-disable-next-line no-restricted-syntax
-  for (const error of errors) {
-    if (error.documentId) {
-      if (!needsRecrawl.has(error.documentId)) {
-        needsRecrawl.set(error.documentId, new Set());
-      }
-      if (error.chapterNumber !== undefined) {
-        needsRecrawl.get(error.documentId)!.add(error.chapterNumber);
-      }
-    }
+  for (const err of errors) {
+    if (!err.documentId) continue;
+    if (!needsRecrawl.has(err.documentId))
+      needsRecrawl.set(err.documentId, new Set());
+    if (err.chapterNumber !== undefined)
+      needsRecrawl.get(err.documentId)!.add(err.chapterNumber);
   }
 
   return needsRecrawl;

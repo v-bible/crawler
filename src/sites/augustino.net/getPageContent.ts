@@ -2,13 +2,16 @@
 /* eslint-disable no-continue */
 import retry from 'async-retry';
 import { type Page, chromium, devices } from 'playwright';
-import { type GetPageContentFunction } from '@/lib/crawler/crawler';
+import { type GetPageContentParams } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
 import { getLogContext, logWarn } from '@/lib/crawler/logUtils';
 import {
   type Footnote,
   type SingleLanguageSentence,
 } from '@/lib/crawler/schema';
+import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
+import { pageToChapterTree } from '@/lib/crawler/treeUtils';
+import { type WorkerHandlerFn } from '@/lib/crawler/worker';
 import { extractFootnote, removeAllFootnote } from '@/lib/md/footnoteUtils';
 import { extractHeading, removeAllHeading } from '@/lib/md/headingUtils';
 import {
@@ -85,10 +88,10 @@ const extractFootnoteRef = async (
   };
 };
 
-const getPageContent: GetPageContentFunction = async ({
-  resourceHref,
-  chapterParams,
-}) => {
+const getPageContent: WorkerHandlerFn<
+  GetPageContentParams,
+  ChapterTreeOutput
+> = async ({ resourceHref, chapterParams, metadata }) => {
   const { href } = resourceHref;
 
   const browser = await chromium.launch();
@@ -266,7 +269,7 @@ const getPageContent: GetPageContentFunction = async ({
       };
     });
 
-    return pageData;
+    return pageToChapterTree(pageData, chapterParams, metadata);
   } finally {
     await context.close();
     await browser.close();

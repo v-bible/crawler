@@ -1,5 +1,6 @@
 import { isValid, parse } from 'date-fns';
 import { u } from 'unist-builder';
+import { type Logger } from 'winston';
 import { toXml } from 'xast-util-to-xml';
 import { type Child, x } from 'xastscript';
 import { getChapterId, getDocumentId } from '@/lib/crawler/getId';
@@ -7,9 +8,11 @@ import {
   type ChapterParams,
   ChapterParamsSchema,
   type LanguageCode,
+  type Metadata,
   type MetadataInput,
   MetadataSchema,
   type Page,
+  PageSchema,
   type Sentence,
   type SentenceHeading,
   type TreeFootnote,
@@ -83,13 +86,14 @@ export type GenerateTreeFunction = (
 
 export type StringifyTreeFunction = (
   tree: ChapterTreeOutput,
-  options?: Record<string, unknown>,
+  options?: object,
+  log?: Logger,
 ) => {
   content: string;
   extension: string;
 };
 
-const generateXmlTree: StringifyTreeFunction = (chapterTree) => {
+const stringifyXmlTree: StringifyTreeFunction = (chapterTree) => {
   const xmlTree = x(
     'root',
     {},
@@ -289,8 +293,45 @@ const generateXmlTree: StringifyTreeFunction = (chapterTree) => {
   };
 };
 
-const generateJsonTree: StringifyTreeFunction = (chapterTree) => {
+const stringifyJsonTree: StringifyTreeFunction = (chapterTree) => {
   return { content: JSON.stringify(chapterTree, null, 2), extension: 'json' };
+};
+
+const stringifyCsvTree: StringifyTreeFunction = (
+  chapterTree,
+  options?: {
+    sentenceIdLabel?: string;
+    languageCodeLabel?: string;
+    textLabel?: string;
+  },
+) => {
+  const {
+    sentenceIdLabel = 'sentence_id',
+    languageCodeLabel = 'language_code',
+    textLabel = 'text',
+  } = options || {};
+
+  let csvContent = `"${sentenceIdLabel}","${languageCodeLabel}","${textLabel}"\n`;
+
+  chapterTree.root.file.sect.pages.forEach((page) => {
+    page.sentences.forEach((sentence) => {
+      if (sentence.type === 'single') {
+        csvContent += `"${sentence.id}","${sentence.languageCode}", "${sentence.text.replace(
+          /"/g,
+          '""',
+        )}"\n`;
+      } else {
+        sentence.array.forEach((lang) => {
+          csvContent += `"${sentence.id}","${lang.languageCode}", "${lang.text.replace(
+            /"/g,
+            '""',
+          )}"\n`;
+        });
+      }
+    });
+  });
+
+  return { content: csvContent.trim(), extension: 'csv' };
 };
 
 const generateDataTree = ((
@@ -444,49 +485,53 @@ const generateDataTreeWithAnnotation = (
   );
 };
 
-const generateCsvTree: StringifyTreeFunction = (
-  chapterTree,
-  options?: {
-    sentenceIdLabel?: string;
-    languageCodeLabel?: string;
-    textLabel?: string;
-  },
-) => {
-  const {
-    sentenceIdLabel = 'sentence_id',
-    languageCodeLabel = 'language_code',
-    textLabel = 'text',
-  } = options || {};
+const pageToChapterTree = (
+  pageData: Page[],
+  chapterParams: ChapterParams,
+  metadata: Metadata,
+): ChapterTreeOutput => {
+  const parsedPage = PageSchema.array().parse(pageData);
 
-  let csvContent = `"${sentenceIdLabel}","${languageCodeLabel}","${textLabel}"\n`;
+  const treeFootnotes = parsedPage
+    .flatMap((page) => {
+      return page.sentences.flatMap((sentence) => {
+        if (sentence.type === 'single') {
+          return sentence?.footnotes || [];
+        }
 
-  chapterTree.root.file.sect.pages.forEach((page) => {
-    page.sentences.forEach((sentence) => {
-      if (sentence.type === 'single') {
-        csvContent += `"${sentence.id}","${sentence.languageCode}", "${sentence.text.replace(
-          /"/g,
-          '""',
-        )}"\n`;
-      } else {
-        sentence.array.forEach((lang) => {
-          csvContent += `"${sentence.id}","${lang.languageCode}", "${lang.text.replace(
-            /"/g,
-            '""',
-          )}"\n`;
-        });
-      }
+        return sentence.array.flatMap((lang) => lang?.footnotes || []);
+      });
+    })
+    .map((footnote, idx) => ({
+      ...footnote,
+      order: idx,
+    })) satisfies TreeFootnote[];
+
+  const treeHeadings = parsedPage.flatMap((page) => {
+    return page.sentences.flatMap((sentence) => {
+      return sentence.headings || [];
     });
-  });
+  }) satisfies SentenceHeading[];
 
-  return { content: csvContent.trim(), extension: 'csv' };
+  const tree = generateDataTree(
+    {
+      chapterParams,
+      metadata,
+      pages: parsedPage,
+      footnotes: treeFootnotes,
+      headings: treeHeadings,
+    },
+    {},
+  );
+
+  return tree;
 };
 
 export {
-  newLineIndent,
-  generateIndent,
+  pageToChapterTree,
   generateDataTree,
   generateDataTreeWithAnnotation,
-  generateXmlTree,
-  generateJsonTree,
-  generateCsvTree,
+  stringifyXmlTree,
+  stringifyJsonTree,
+  stringifyCsvTree,
 };

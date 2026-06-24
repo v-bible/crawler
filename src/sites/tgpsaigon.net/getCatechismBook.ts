@@ -8,7 +8,8 @@ import { PDFDocument } from 'pdf-lib';
 import { type APIRequestContext, chromium, devices } from 'playwright';
 import { fetch } from 'undici';
 import { DEFAULT_CATECHISM_OUTPUT_DIR } from '@/constants';
-import { type GetPageExtraContentFunction } from '@/lib/crawler/crawler';
+import { type GetPageContentParams } from '@/lib/crawler/crawler';
+import { type WorkerHandlerFn } from '@/lib/crawler/worker';
 import { logger } from '@/logger/logger';
 
 const BASE = 'https://tgpsaigon.net';
@@ -462,9 +463,10 @@ async function downloadLessonImages(params: {
   return { heroFilePath, detailFilePaths };
 }
 
-export const getCatechismBook: GetPageExtraContentFunction = async ({
-  chapterParams,
-}) => {
+export const getCatechismBook: WorkerHandlerFn<
+  GetPageContentParams,
+  void
+> = async ({ chapterParams }) => {
   const gradeNum = chapterParams.chapterNumber;
   const gradeTitle = `Hiệp thông ${gradeNum}`;
 
