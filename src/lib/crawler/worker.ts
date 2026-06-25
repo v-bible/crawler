@@ -78,8 +78,6 @@ export class Worker<TData> {
     this.type = 'worker';
     this.shardIndex = args.shardIndex;
     this.log = logger.child({
-      id: this.workerId,
-      type: this.type,
       shardIndex: this.shardIndex,
     });
     this.handlers = args.handlers;

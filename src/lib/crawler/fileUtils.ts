@@ -1,6 +1,7 @@
 import { createReadStream, mkdirSync, readdirSync, writeFileSync } from 'fs';
 import path, { dirname } from 'path';
 import { type ParserOptionsArgs, parseStream } from 'fast-csv';
+import { type Logger } from 'winston';
 import { getChapterId, getDocumentId } from '@/lib/crawler/getId';
 import {
   type ChapterParams,
@@ -39,6 +40,7 @@ const writeChapterContent = ({
   content,
   extension,
   documentTitle,
+  log = logger,
 }: {
   params: ChapterParams;
   baseDir: string;
@@ -46,6 +48,7 @@ const writeChapterContent = ({
   extension: string;
   documentTitle?: string;
   getFileName?: GetDefaultDocumentPathFunction;
+  log?: Logger;
 }) => {
   // NOTE: We write to genre dir directly instead of
   // baseDir/domain/subDomain/genre to reduce complexity
@@ -60,14 +63,14 @@ const writeChapterContent = ({
   try {
     mkdirSync(documentFolderPath, { recursive: true });
   } catch (error) {
-    logger.error(`Error creating folder ${documentFolderPath}:`, error);
+    log.error(`Error creating folder ${documentFolderPath}:`, error);
   }
 
   try {
     writeFileSync(fileName, content, 'utf8');
-    logger.info(`File written successfully: ${fileName}`);
+    log.info(`File written successfully: ${fileName}`);
   } catch (error) {
-    logger.error(`Error writing file ${fileName}:`, error);
+    log.error(`Error writing file ${fileName}:`, error);
   }
 };
 
@@ -78,6 +81,7 @@ const writeChapterContentBuffer = ({
   content,
   extension,
   documentTitle,
+  log = logger,
 }: {
   params: ChapterParams;
   baseDir: string;
@@ -85,6 +89,7 @@ const writeChapterContentBuffer = ({
   extension: string;
   documentTitle?: string;
   getFileName?: GetDefaultDocumentPathFunction;
+  log?: Logger;
 }) => {
   // NOTE: We write to genre dir directly instead of
   // baseDir/domain/subDomain/genre to reduce complexity
@@ -99,14 +104,14 @@ const writeChapterContentBuffer = ({
   try {
     mkdirSync(documentFolderPath, { recursive: true });
   } catch (error) {
-    logger.error(`Error creating folder ${documentFolderPath}:`, error);
+    log.error(`Error creating folder ${documentFolderPath}:`, error);
   }
 
   try {
     writeFileSync(fileName, content);
-    logger.info(`File written successfully: ${fileName}`);
+    log.info(`File written successfully: ${fileName}`);
   } catch (error) {
-    logger.error(`Error writing file ${fileName}:`, error);
+    log.error(`Error writing file ${fileName}:`, error);
   }
 };
 

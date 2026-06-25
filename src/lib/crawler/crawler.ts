@@ -298,6 +298,12 @@ class Crawler {
                         log,
                       );
 
+                      const logConfig = {
+                        name: stringify.name,
+                        documentId: checkpoint.params.documentId,
+                        href,
+                      };
+
                       if (typeof content === 'string') {
                         writeChapterContent({
                           getFileName,
@@ -306,6 +312,7 @@ class Crawler {
                           extension,
                           documentTitle: checkpoint.params.title,
                           baseDir: this.outputFileDir,
+                          log: log?.child(logConfig),
                         });
                       } else if (Buffer.isBuffer(content)) {
                         writeChapterContentBuffer({
@@ -315,6 +322,7 @@ class Crawler {
                           extension,
                           documentTitle: checkpoint.params.title,
                           baseDir: this.outputFileDir,
+                          log: log?.child(logConfig),
                         });
                       }
                     },
