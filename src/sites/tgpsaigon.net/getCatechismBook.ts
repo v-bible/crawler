@@ -9,6 +9,7 @@ import { type APIRequestContext, chromium, devices } from 'playwright';
 import { fetch } from 'undici';
 import { DEFAULT_CATECHISM_OUTPUT_DIR } from '@/constants';
 import { type GetPageContentParams } from '@/lib/crawler/crawler';
+import { type Metadata } from '@/lib/crawler/schema';
 import { type WorkerHandlerFn } from '@/lib/crawler/worker';
 import { logger } from '@/logger/logger';
 
@@ -465,7 +466,8 @@ async function downloadLessonImages(params: {
 
 export const getCatechismBook: WorkerHandlerFn<
   GetPageContentParams,
-  void
+  void,
+  Metadata
 > = async ({ chapterParams }) => {
   const gradeNum = chapterParams.chapterNumber;
   const gradeTitle = `Hiệp thông ${gradeNum}`;

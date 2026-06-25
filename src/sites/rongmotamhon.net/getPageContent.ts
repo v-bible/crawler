@@ -3,7 +3,11 @@ import { retry } from 'es-toolkit';
 import { type GetPageContentParams } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
 import { type LogContext, logError } from '@/lib/crawler/logUtils';
-import { type MultiLanguageSentence, type Page } from '@/lib/crawler/schema';
+import {
+  type Metadata,
+  type MultiLanguageSentence,
+  type Page,
+} from '@/lib/crawler/schema';
 import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
 import { pageToChapterTree } from '@/lib/crawler/treeUtils';
 import { type WorkerHandlerFn } from '@/lib/crawler/worker';
@@ -63,8 +67,9 @@ const fetchHtmlContent = async (url: string) => {
 
 const getPageContent: WorkerHandlerFn<
   GetPageContentParams,
-  ChapterTreeOutput
-> = async ({ resourceHref, chapterParams, metadata }) => {
+  ChapterTreeOutput,
+  Metadata
+> = async ({ resourceHref, chapterParams }, metadata) => {
   const { href } = resourceHref;
 
   const { browser, context, page } = await createRongMotamhonBrowserPage({

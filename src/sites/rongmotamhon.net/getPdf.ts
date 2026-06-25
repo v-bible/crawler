@@ -7,17 +7,17 @@ import {
   writeChapterContentBuffer,
 } from '@/lib/crawler/fileUtils';
 import { getLogContext, logError, logInfo } from '@/lib/crawler/logUtils';
+import { type Metadata } from '@/lib/crawler/schema';
 import { type WorkerHandlerFn } from '@/lib/crawler/worker';
 import {
   createRongMotamhonBrowserPage,
   gotoWithRetry,
 } from '@/sites/rongmotamhon.net/browserUtils';
 
-const getPdf: WorkerHandlerFn<GetPageContentParams, void> = async ({
-  resourceHref,
-  chapterParams,
+const getPdf: WorkerHandlerFn<GetPageContentParams, void, Metadata> = async (
+  { resourceHref, chapterParams },
   metadata,
-}) => {
+) => {
   const { href } = resourceHref;
   const logContext = getLogContext(chapterParams, metadata, href);
 

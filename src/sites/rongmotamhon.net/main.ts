@@ -1,4 +1,5 @@
 import { Crawler } from '@/lib/crawler/crawler';
+import { getDefaultDocumentPath } from '@/lib/crawler/fileUtils';
 import { filterChapterCheckpoint } from '@/lib/crawler/filterUtils';
 import { sortCheckpointAsc } from '@/lib/crawler/sortUtils';
 import {
@@ -6,7 +7,7 @@ import {
   stringifyJsonTree,
   stringifyXmlTree,
 } from '@/lib/crawler/treeUtils';
-import { defineHandler } from '@/lib/crawler/worker';
+import { defineGetFileNameFunction, defineHandler } from '@/lib/crawler/worker';
 import { getChapters } from '@/sites/rongmotamhon.net/getChapters';
 import { getMetadataList } from '@/sites/rongmotamhon.net/getMetadataList';
 import { getPageContent } from '@/sites/rongmotamhon.net/getPageContent';
@@ -32,14 +33,26 @@ export const crawler = new Crawler({
         {
           name: 'json',
           fn: stringifyJsonTree,
+          output: {
+            extension: 'json',
+            getFileName: defineGetFileNameFunction(getDefaultDocumentPath),
+          },
         },
         {
           name: 'xml',
           fn: stringifyXmlTree,
+          output: {
+            extension: 'xml',
+            getFileName: defineGetFileNameFunction(getDefaultDocumentPath),
+          },
         },
         {
           name: 'csv',
           fn: stringifyCsvTree,
+          output: {
+            extension: 'csv',
+            getFileName: defineGetFileNameFunction(getDefaultDocumentPath),
+          },
         },
       ],
     }),
@@ -51,14 +64,29 @@ export const crawler = new Crawler({
         {
           name: 'json',
           fn: stringifyJsonTree,
+          output: {
+            extension: 'json',
+            suffix: '_vie',
+            getFileName: defineGetFileNameFunction(getDefaultDocumentPath),
+          },
         },
         {
           name: 'xml',
           fn: stringifyXmlTree,
+          output: {
+            extension: 'xml',
+            suffix: '_vie',
+            getFileName: defineGetFileNameFunction(getDefaultDocumentPath),
+          },
         },
         {
           name: 'csv',
           fn: stringifyCsvTree,
+          output: {
+            extension: 'csv',
+            suffix: '_vie',
+            getFileName: defineGetFileNameFunction(getDefaultDocumentPath),
+          },
         },
       ],
     }),
@@ -67,10 +95,12 @@ export const crawler = new Crawler({
       stringify: [
         {
           name: 'md',
-          fn: (content) => ({
-            content,
+          fn: (content) => content,
+          output: {
             extension: 'md',
-          }),
+            suffix: '_vie',
+            getFileName: defineGetFileNameFunction(getDefaultDocumentPath),
+          },
         },
       ],
     }),

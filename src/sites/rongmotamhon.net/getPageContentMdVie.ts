@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable no-continue */
 import { type GetPageContentParams } from '@/lib/crawler/crawler';
+import { type Metadata } from '@/lib/crawler/schema';
 import { type WorkerHandlerFn } from '@/lib/crawler/worker';
 import {
   cleanupMdProcessor,
@@ -23,7 +24,8 @@ import {
 
 const getPageContentMdVie: WorkerHandlerFn<
   GetPageContentParams,
-  string
+  string,
+  Metadata
 > = async ({ resourceHref }) => {
   const { href } = resourceHref;
 

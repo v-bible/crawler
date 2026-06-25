@@ -13,7 +13,7 @@ export const crawler = new Crawler({
       metadataRow.source === 'tgpsaigon.net' && metadataRow.sourceType === 'web'
     );
   },
-  getChapters: async ({ resourceHref, documentParams, metadata }) => {
+  getChapters: async ({ resourceHref, documentParams }, metadata) => {
     const gradeNum = documentParams?.documentNumber ?? 1;
 
     return [
@@ -30,6 +30,7 @@ export const crawler = new Crawler({
     defineHandler({
       handler: {
         fn: getCatechismBook,
+        // REVIEW: Setup output for manifest checking
       },
     }),
   ],

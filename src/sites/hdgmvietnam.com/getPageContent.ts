@@ -7,6 +7,7 @@ import { getPageId, getSentenceId } from '@/lib/crawler/getId';
 import { getLogContext, logWarn } from '@/lib/crawler/logUtils';
 import {
   type Footnote,
+  type Metadata,
   type SingleLanguageSentence,
 } from '@/lib/crawler/schema';
 import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
@@ -96,8 +97,9 @@ const extractFootnoteRef = async (
 
 const getPageContent: WorkerHandlerFn<
   GetPageContentParams,
-  ChapterTreeOutput
-> = async ({ resourceHref, chapterParams, metadata }) => {
+  ChapterTreeOutput,
+  Metadata
+> = async ({ resourceHref, chapterParams }, metadata) => {
   const { href } = resourceHref;
 
   const browser = await chromium.launch();

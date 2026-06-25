@@ -4,7 +4,10 @@ import { retry } from 'es-toolkit';
 import { chromium, devices } from 'playwright';
 import { type GetPageContentParams } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
-import { type SingleLanguageSentence } from '@/lib/crawler/schema';
+import {
+  type Metadata,
+  type SingleLanguageSentence,
+} from '@/lib/crawler/schema';
 import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
 import { pageToChapterTree } from '@/lib/crawler/treeUtils';
 import { type WorkerHandlerFn } from '@/lib/crawler/worker';
@@ -29,8 +32,9 @@ import { winkNLPInstance } from '@/lib/wink-nlp';
 
 const getPageContent: WorkerHandlerFn<
   GetPageContentParams,
-  ChapterTreeOutput
-> = async ({ resourceHref, chapterParams, metadata }) => {
+  ChapterTreeOutput,
+  Metadata
+> = async ({ resourceHref, chapterParams }, metadata) => {
   const { href } = resourceHref;
 
   const browser = await chromium.launch();
