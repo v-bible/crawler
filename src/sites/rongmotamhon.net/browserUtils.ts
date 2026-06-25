@@ -1,5 +1,5 @@
 import { PlaywrightBlocker } from '@ghostery/adblocker-playwright';
-import retry from 'async-retry';
+import { retry } from 'es-toolkit';
 import { type Page, chromium, devices } from 'playwright';
 
 export type RongMotamhonBrowserPage = {

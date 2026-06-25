@@ -1,5 +1,5 @@
 /* eslint-disable no-await-in-loop */
-import retry from 'async-retry';
+import { retry } from 'es-toolkit';
 import { DEFAULT_OUTPUT_FILE_DIR } from '@/constants';
 import { type GetPageContentParams } from '@/lib/crawler/crawler';
 import {

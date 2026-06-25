@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable no-continue */
-import retry from 'async-retry';
+import { retry } from 'es-toolkit';
 import { type Locator, chromium, devices } from 'playwright';
 import { type GetPageContentFunction } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';

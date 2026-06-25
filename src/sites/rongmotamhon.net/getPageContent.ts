@@ -1,5 +1,5 @@
 /* eslint-disable no-restricted-syntax */
-import retry from 'async-retry';
+import { retry } from 'es-toolkit';
 import { type GetPageContentParams } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
 import { type LogContext, logError } from '@/lib/crawler/logUtils';

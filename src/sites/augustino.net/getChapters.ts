@@ -1,4 +1,4 @@
-import retry from 'async-retry';
+import { retry } from 'es-toolkit';
 import { chromium, devices } from 'playwright';
 import { type GetChaptersFunction } from '@/lib/crawler/crawler';
 import { type LogContext, logWarn } from '@/lib/crawler/logUtils';
