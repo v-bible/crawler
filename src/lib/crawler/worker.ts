@@ -3,62 +3,79 @@
 /* eslint-disable no-restricted-syntax */
 import { randomUUID } from 'node:crypto';
 import { type Logger } from 'winston';
-import { GetDefaultDocumentPathFunction } from '@/lib/crawler/fileUtils';
+import { DEFAULT_TIMEOUT } from '@/constants';
+import { withTimeout } from '@/lib/timeout';
 import { logger } from '@/logger/logger';
 
-export type WorkerHandler<TData, TOutput> = {
+export type GetFileNameFunction<
+  TParams extends {
+    extension: string;
+    documentTitle?: string;
+    suffix?: string;
+  },
+> = (params: TParams) => string;
+
+export type WorkerHandler<TData, TOutput, TMeta> = {
   handler: {
-    fn: (params: TData) => Promise<TOutput> | TOutput;
+    fn: (params: TData, metadata: TMeta) => Promise<TOutput> | TOutput;
+    timeoutMs?: number;
     onStart?: (params: TData, log?: Logger) => void;
     onFinish?: (params: TOutput, log?: Logger) => void;
     onError?: (error: Error, log?: Logger) => void;
+    output?: {
+      extension: string;
+      getFileName: GetFileNameFunction<any>;
+    };
   };
   stringify?: {
     name: string;
-    fn: (
-      data: TOutput,
-      options?: object,
-      log?: Logger,
-    ) => {
-      content: string | Buffer;
-      extension: string;
-    };
+    fn: (data: TOutput, options?: object, log?: Logger) => string | Buffer;
     stringifyOptions?: object;
     onStart?: (params: TOutput, log?: Logger) => void;
-    onFinish?: (
-      content: string | Buffer,
-      fileName: string,
-      getFileName?: GetDefaultDocumentPathFunction,
-      log?: Logger,
-    ) => void;
+    onFinish?: (content: string | Buffer, log?: Logger) => void;
     onError?: (error: Error, log?: Logger) => void;
-    getFileName?: GetDefaultDocumentPathFunction;
+    output?: {
+      extension: string;
+      getFileName: GetFileNameFunction<any>;
+      suffix?: string;
+    };
   }[];
   onStringifyStart?: (log?: Logger) => void;
   onStringifyFinish?: (log?: Logger) => void;
   onStringifyError?: (error: Error, log?: Logger) => void;
 };
 
-export type WorkerHandlerFn<TData, TOutput> = WorkerHandler<
+export type WorkerHandlerFn<TData, TOutput, TMeta> = WorkerHandler<
   TData,
-  TOutput
+  TOutput,
+  TMeta
 >['handler']['fn'];
 
-type WorkerArgs<TData> = {
-  workerId: string;
+type WorkerArgs<TData, TMeta> = {
+  workerId?: string; // Made optional so randomUUID works correctly if not provided
   shardIndex: number;
-  handlers: WorkerHandler<TData, any>[];
+  handlers: WorkerHandler<TData, any, TMeta>[];
   onWorkerStart?: (workerId: string) => void;
   onWorkerFinish?: (workerId: string) => void;
 };
 
-export function defineHandler<TData, TOutput>(
-  config: WorkerHandler<TData, TOutput>,
-): WorkerHandler<TData, TOutput> {
+export function defineHandler<TData, TOutput, TMeta>(
+  config: WorkerHandler<TData, TOutput, TMeta>,
+): WorkerHandler<TData, TOutput, TMeta> {
   return config;
 }
 
-export class Worker<TData> {
+export function defineGetFileNameFunction<
+  TParams extends {
+    extension: string;
+    documentTitle?: string;
+    suffix?: string;
+  },
+>(fn: GetFileNameFunction<TParams>): GetFileNameFunction<TParams> {
+  return fn;
+}
+
+export class Worker<TData, TMeta> {
   workerId: string;
 
   type: 'worker';
@@ -67,14 +84,16 @@ export class Worker<TData> {
 
   log: Logger;
 
-  handlers: WorkerHandler<TData, unknown>[];
+  handlers: WorkerHandler<TData, any, TMeta>[];
 
   onWorkerStart?: (workerId: string) => void;
 
   onWorkerFinish?: (workerId: string) => void;
 
-  constructor(args: Omit<WorkerArgs<TData>, 'workerId'>) {
-    this.workerId = randomUUID();
+  constructor(
+    args: Omit<WorkerArgs<TData, TMeta>, 'workerId'> & { workerId?: string },
+  ) {
+    this.workerId = args.workerId || randomUUID();
     this.type = 'worker';
     this.shardIndex = args.shardIndex;
     this.log = logger.child({
@@ -89,7 +108,7 @@ export class Worker<TData> {
     return this.workerId;
   }
 
-  async run(data: TData) {
+  async run(data: TData, metadata: TMeta) {
     if (this.onWorkerStart) {
       this.onWorkerStart(this.workerId);
     }
@@ -102,7 +121,11 @@ export class Worker<TData> {
       }
 
       try {
-        const result = await handlerFn.fn(data);
+        // 3. Wrap the core handler execution in the timeout utility
+        const result = await withTimeout(
+          async () => handlerFn.fn(data, metadata),
+          handlerFn.timeoutMs || DEFAULT_TIMEOUT,
+        );
 
         if (handlerFn.onFinish) {
           handlerFn.onFinish(result, this.log);
@@ -120,26 +143,20 @@ export class Worker<TData> {
               onStart,
               onFinish,
               onError,
-              getFileName,
             } of stringifyFn || []) {
               if (onStart) {
                 onStart(result, this.log);
               }
 
               try {
-                const { content, extension } = fn(
+                const content = fn(
                   result,
                   stringifyOptions,
                   this.log.child({ name }),
                 );
 
                 if (onFinish) {
-                  onFinish(
-                    content,
-                    extension,
-                    getFileName,
-                    this.log.child({ name }),
-                  );
+                  onFinish(content, this.log.child({ name }));
                 }
               } catch (error) {
                 if (onError) {
@@ -159,10 +176,11 @@ export class Worker<TData> {
           }
         }
       } catch (error) {
+        // 4. Timeouts will now be caught here alongside standard execution errors
         if (handlerFn.onError) {
           handlerFn.onError(error as Error, this.log);
         }
-        continue;
+        continue; // Proceed to the next handler if this one fails
       }
     }
 

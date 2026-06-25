@@ -34,12 +34,12 @@ const getDefaultDocumentPath: GetDefaultDocumentPathFunction = (params) => {
 };
 
 const writeChapterContent = ({
-  getFileName = getDefaultDocumentPath,
   params,
   baseDir,
   content,
   extension,
   documentTitle,
+  getFileName = getDefaultDocumentPath,
   log = logger,
 }: {
   params: ChapterParams;
@@ -72,15 +72,17 @@ const writeChapterContent = ({
   } catch (error) {
     log.error(`Error writing file ${fileName}:`, error);
   }
+
+  return fileName;
 };
 
 const writeChapterContentBuffer = ({
-  getFileName = getDefaultDocumentPath,
   params,
   baseDir,
   content,
   extension,
   documentTitle,
+  getFileName = getDefaultDocumentPath,
   log = logger,
 }: {
   params: ChapterParams;
@@ -113,6 +115,8 @@ const writeChapterContentBuffer = ({
   } catch (error) {
     log.error(`Error writing file ${fileName}:`, error);
   }
+
+  return fileName;
 };
 
 const readCsvFileStream = <T extends MetadataRowCSV>(
