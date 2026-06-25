@@ -98,6 +98,23 @@ type CrawlerArgs = Omit<GenreParams, 'genre'> & {
   crawlerCount?: number;
 };
 
+async function runWithConcurrency<T>(
+  items: Iterable<T> | AsyncIterable<T>,
+  limit: number,
+  task: (item: T) => Promise<void>,
+): Promise<void> {
+  const executing = new Set<Promise<void>>();
+  // eslint-disable-next-line no-restricted-syntax
+  for await (const item of items) {
+    const promise = task(item).finally(() => executing.delete(promise));
+    executing.add(promise);
+    if (executing.size >= limit) {
+      await Promise.race(executing); // Wait for at least one to finish before adding more
+    }
+  }
+  await Promise.all(executing); // Drain the remaining promises
+}
+
 class Crawler {
   name: string;
 
@@ -262,96 +279,100 @@ class Crawler {
       metadataShards.map(async (metadataShard, shardIndex) => {
         // eslint-disable-next-line no-restricted-syntax
         for await (const checkpoint of metadataShard) {
-          // eslint-disable-next-line no-restricted-syntax
-          for await (const subtask of checkpoint.subtasks || []) {
-            const { href, props } = subtask.params;
+          // NOTE: Hoist invariant variables out of the inner loop
+          const documentParams = {
+            ...this.domainParams,
+            genre: checkpoint.params.genre.code,
+            documentNumber: +checkpoint.params.documentNumber,
+          };
 
-            const documentParams = {
-              ...this.domainParams,
-              genre: checkpoint.params.genre.code,
-              documentNumber: +checkpoint.params.documentNumber,
-            };
+          const subtasks = checkpoint.subtasks || [];
+          const CONCURRENCY_LIMIT = 5; // Adjust this based on your worker's resource intensity
 
-            const chapterParams = {
-              ...documentParams,
-              chapterNumber: props?.chapterNumber || 1,
-              chapterName: props?.chapterName || '',
-            };
+          // NOTE: Process subtasks concurrently with a strict limit
+          await runWithConcurrency(
+            subtasks,
+            CONCURRENCY_LIMIT,
+            async (subtask) => {
+              const { href, props } = subtask.params;
 
-            await new Worker({
-              shardIndex,
-              handlers: this.handlers.map((handler) => ({
-                ...handler,
-                stringify: handler.stringify?.map((stringify) => {
-                  return {
-                    ...stringify,
-                    onFinish: (
-                      content,
-                      extension,
-                      getFileName,
-                      log?: Logger,
-                    ) => {
-                      stringify.onFinish?.(
+              const chapterParams = {
+                ...documentParams,
+                chapterNumber: props?.chapterNumber || 1,
+                chapterName: props?.chapterName || '',
+              };
+
+              await new Worker({
+                shardIndex,
+                handlers: this.handlers.map((handler) => ({
+                  ...handler,
+                  stringify: handler.stringify?.map((stringify) => {
+                    return {
+                      ...stringify,
+                      onFinish: (
                         content,
                         extension,
                         getFileName,
-                        log,
-                      );
-
-                      const logConfig = {
-                        name: stringify.name,
-                        documentId: checkpoint.params.documentId,
-                        href,
-                      };
-
-                      if (typeof content === 'string') {
-                        writeChapterContent({
-                          getFileName,
-                          params: chapterParams,
+                        log?: Logger,
+                      ) => {
+                        stringify.onFinish?.(
                           content,
                           extension,
-                          documentTitle: checkpoint.params.title,
-                          baseDir: this.outputFileDir,
-                          log: log?.child(logConfig),
-                        });
-                      } else if (Buffer.isBuffer(content)) {
-                        writeChapterContentBuffer({
                           getFileName,
-                          params: chapterParams,
-                          content,
-                          extension,
-                          documentTitle: checkpoint.params.title,
-                          baseDir: this.outputFileDir,
-                          log: log?.child(logConfig),
-                        });
-                      }
-                    },
-                  };
-                }),
-                onStringifyFinish: (log?: Logger) => {
-                  handler.onStringifyFinish?.(log);
-                  setSubtaskComplete(checkpoint.id, subtask.id, true);
-                },
-                onStringifyError: (error: Error, log?: Logger) => {
-                  handler.onStringifyError?.(error, log);
-                  logger.error(
-                    `Error in stringify for chapter ${chapterParams.chapterNumber} of document ${checkpoint.params.documentId}:`,
-                    {
-                      href,
-                      error,
-                    },
-                    error,
-                  );
-                },
-              })),
-            }).run({
-              resourceHref: { href, props },
-              chapterParams,
-              metadata: checkpoint.params,
-            });
+                          log,
+                        );
 
-            setCheckpointComplete(checkpoint.id, true);
-          }
+                        const logConfig = {
+                          name: stringify.name,
+                          documentId: checkpoint.params.documentId,
+                          href,
+                        };
+
+                        if (typeof content === 'string') {
+                          writeChapterContent({
+                            getFileName,
+                            params: chapterParams,
+                            content,
+                            extension,
+                            documentTitle: checkpoint.params.title,
+                            baseDir: this.outputFileDir,
+                            log: log?.child(logConfig),
+                          });
+                        } else if (Buffer.isBuffer(content)) {
+                          writeChapterContentBuffer({
+                            getFileName,
+                            params: chapterParams,
+                            content,
+                            extension,
+                            documentTitle: checkpoint.params.title,
+                            baseDir: this.outputFileDir,
+                            log: log?.child(logConfig),
+                          });
+                        }
+                      },
+                    };
+                  }),
+                  onStringifyFinish: (log?: Logger) => {
+                    handler.onStringifyFinish?.(log);
+                    setSubtaskComplete(checkpoint.id, subtask.id, true);
+                  },
+                  onStringifyError: (error: Error, log?: Logger) => {
+                    handler.onStringifyError?.(error, log);
+                    logger.error(
+                      `Error in stringify for chapter ${chapterParams.chapterNumber} of document ${checkpoint.params.documentId}:`,
+                      { href, error },
+                    );
+                  },
+                })),
+              }).run({
+                resourceHref: { href, props },
+                chapterParams,
+                metadata: checkpoint.params,
+              });
+            },
+          );
+
+          setCheckpointComplete(checkpoint.id, true);
         }
       }),
     );
