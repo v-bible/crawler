@@ -55,7 +55,7 @@ const getPdf: WorkerHandlerFn<GetPageContentParams, void> = async ({
             async () => {
               await pdfPage.goto(pdfHref, {
                 waitUntil: 'domcontentloaded',
-                timeout: 5 * 36000,
+                timeout: 1000 * 60, // 1 minute,
               });
             },
             {
@@ -70,7 +70,7 @@ const getPdf: WorkerHandlerFn<GetPageContentParams, void> = async ({
               const request = await pdfPage.waitForRequest(
                 (req) => req.url().endsWith('.pdf'),
                 {
-                  timeout: 5 * 36000,
+                  timeout: 1000 * 60, // 1 minute,
                 },
               );
               return request;

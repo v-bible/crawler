@@ -18,6 +18,7 @@ export const crawler = new Crawler({
   name: 'rongmotamhon.net',
   domain: 'R',
   subDomain: 'B',
+  crawlerCount: 10,
   getMetadata: getMetadataList,
   sortCheckpointTask: sortCheckpointAsc,
   filterCheckpointTask: filterChapterCheckpoint,

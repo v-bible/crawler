@@ -33,7 +33,7 @@ export async function gotoWithRetry(page: Page, url: string): Promise<void> {
     async () => {
       await page.goto(url, {
         waitUntil: 'domcontentloaded',
-        timeout: 5 * 36000,
+        timeout: 1000 * 60, // 1 minute
       });
     },
     {

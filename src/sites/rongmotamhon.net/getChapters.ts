@@ -13,7 +13,7 @@ const getChapters: GetChaptersFunction = async ({ resourceHref }) => {
 
   try {
     await page.goto(href, {
-      timeout: 5 * 36000,
+      timeout: 1000 * 60, // 1 minute,
       waitUntil: 'domcontentloaded',
     });
 
@@ -48,7 +48,7 @@ const getChapters: GetChaptersFunction = async ({ resourceHref }) => {
       chapterLinks.push(...allLinks);
 
       await page.goto(nextBookLink, {
-        timeout: 5 * 36000,
+        timeout: 1000 * 60, // 1 minute,
         waitUntil: 'domcontentloaded',
       });
     }
