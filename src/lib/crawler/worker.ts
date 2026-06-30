@@ -25,6 +25,8 @@ export type WorkerHandler<TData, TOutput, TMeta> = {
     output?: {
       extension: string;
       getFileName: GetFileNameFunction<any>;
+      suffix?: string;
+      allowMissing?: boolean;
     };
   };
   stringify?: {
@@ -38,6 +40,7 @@ export type WorkerHandler<TData, TOutput, TMeta> = {
       extension: string;
       getFileName: GetFileNameFunction<any>;
       suffix?: string;
+      allowMissing?: boolean;
     };
   }[];
   onStringifyStart?: (log?: Logger) => void;
@@ -53,7 +56,7 @@ export type WorkerHandlerFn<TData, TOutput, TMeta> = WorkerHandler<
 
 type WorkerArgs<TData, TMeta> = {
   workerId?: string; // Made optional so randomUUID works correctly if not provided
-  shardIndex: number;
+  shardIndex?: number;
   handlers: WorkerHandler<TData, any, TMeta>[];
   onWorkerStart?: (workerId: string) => void;
   onWorkerFinish?: (workerId: string) => void;
@@ -80,7 +83,7 @@ export class Worker<TData, TMeta> {
 
   type: 'worker';
 
-  shardIndex: number;
+  shardIndex?: number;
 
   log: Logger;
 

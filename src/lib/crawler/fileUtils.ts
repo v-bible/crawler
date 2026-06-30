@@ -29,7 +29,7 @@ const getDefaultDocumentPath: GetDefaultDocumentPathFunction = (params) => {
   }
 
   return `${documentFolderPath}/${getChapterId(params)}${
-    params.suffix ? `_${params.suffix}` : ''
+    params.suffix ? `${params.suffix}` : ''
   }.${params.extension}`;
 };
 
