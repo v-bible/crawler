@@ -13,13 +13,14 @@ import { getMetadataList } from '@/sites/rongmotamhon.net/getMetadataList';
 import { getPageContent } from '@/sites/rongmotamhon.net/getPageContent';
 import { getPageContentMdVie } from '@/sites/rongmotamhon.net/getPageContentMdVie';
 import { getPageContentVie } from '@/sites/rongmotamhon.net/getPageContentVie';
-import { getPdf } from '@/sites/rongmotamhon.net/getPdf';
+import { getPdfBase } from '@/sites/rongmotamhon.net/getPdf';
 
 export const crawler = new Crawler({
   name: 'rongmotamhon.net',
   domain: 'R',
   subDomain: 'B',
-  crawlerCount: 10,
+  crawlerCount: 2,
+  subTaskConcurrencyLimit: 2,
   getMetadata: getMetadataList,
   sortCheckpointTask: sortCheckpointAsc,
   filterCheckpointTask: filterChapterCheckpoint,
@@ -105,7 +106,37 @@ export const crawler = new Crawler({
       ],
     }),
     defineHandler({
-      handler: { fn: getPdf },
+      handler: {
+        fn: getPdfBase({ label: 'Càn Long', suffix: '_can-long' }),
+        output: {
+          extension: 'pdf',
+          suffix: '_can-long',
+          getFileName: defineGetFileNameFunction(getDefaultDocumentPath),
+          allowMissing: true, // Allow missing for Càn Long PDF since it may not be available for all chapters
+        },
+      },
+    }),
+    defineHandler({
+      handler: {
+        fn: getPdfBase({ label: 'Vĩnh Lạc', suffix: '_vinh-lac' }),
+        output: {
+          extension: 'pdf',
+          suffix: '_vinh-lac',
+          getFileName: defineGetFileNameFunction(getDefaultDocumentPath),
+          allowMissing: true, // Allow missing for Càn Long PDF since it may not be available for all chapters
+        },
+      },
+    }),
+    defineHandler({
+      handler: {
+        fn: getPdfBase({ label: 'CBETA', suffix: '_cbeta' }),
+        output: {
+          extension: 'pdf',
+          suffix: '_cbeta',
+          getFileName: defineGetFileNameFunction(getDefaultDocumentPath),
+          allowMissing: false,
+        },
+      },
     }),
   ],
 });

@@ -1,5 +1,8 @@
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable no-continue */
+import { PlaywrightBlocker } from '@ghostery/adblocker-playwright';
+import { retry } from 'es-toolkit';
+import { chromium, devices } from 'playwright';
 import { type GetPageContentParams } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
 import {
@@ -10,11 +13,6 @@ import {
 import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
 import { pageToChapterTree } from '@/lib/crawler/treeUtils';
 import { type WorkerHandlerFn } from '@/lib/crawler/worker';
-import {
-  createRongMotamhonBrowserPage,
-  getReadmeContentHtml,
-  gotoWithRetry,
-} from '@/sites/rongmotamhon.net/browserUtils';
 
 const getPageContentVie: WorkerHandlerFn<
   GetPageContentParams,
@@ -23,24 +21,41 @@ const getPageContentVie: WorkerHandlerFn<
 > = async ({ resourceHref, chapterParams }, metadata) => {
   const { href } = resourceHref;
 
-  const { browser, context, page } = await createRongMotamhonBrowserPage({
-    blockAds: true,
-  });
+  const browser = await chromium.launch();
+  const context = await browser.newContext(devices['Desktop Chrome']);
+  const page = await context.newPage();
 
   try {
-    await gotoWithRetry(page, href);
+    await PlaywrightBlocker.fromPrebuiltAdsAndTracking(fetch).then(
+      (blocker) => {
+        blocker.enableBlockingInPage(page);
+      },
+    );
 
-    const readmeContentHtml = await getReadmeContentHtml(page);
+    await retry(
+      async () => {
+        await page.goto(href, {
+          waitUntil: 'domcontentloaded',
+          timeout: 5 * 36000,
+        });
+      },
+      {
+        retries: 5,
+      },
+    );
 
-    if (!readmeContentHtml.trim()) {
+    const bodyLocator = page.locator('[id="readme"]');
+
+    if (!(await bodyLocator.count())) {
       return pageToChapterTree([], chapterParams, metadata);
     }
 
-    const bodyContent = await page.evaluate((contentHtml) => {
-      const wrapper = document.createElement('div');
-      wrapper.innerHTML = contentHtml;
-      return wrapper.textContent || '';
-    }, readmeContentHtml);
+    await bodyLocator.evaluate((el) => {
+      // NOTE: Remove first bold element which is the title
+      el.querySelector('b')?.firstChild?.remove();
+    });
+
+    const bodyContent = await bodyLocator.textContent();
 
     const sentences =
       bodyContent

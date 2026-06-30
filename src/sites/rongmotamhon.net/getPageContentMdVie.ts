@@ -1,5 +1,8 @@
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable no-continue */
+import { PlaywrightBlocker } from '@ghostery/adblocker-playwright';
+import { retry } from 'es-toolkit';
+import { chromium, devices } from 'playwright';
 import { type GetPageContentParams } from '@/lib/crawler/crawler';
 import { type Metadata } from '@/lib/crawler/schema';
 import { type WorkerHandlerFn } from '@/lib/crawler/worker';
@@ -16,11 +19,6 @@ import {
   removeRedundantSpaces,
 } from '@/lib/md/mdUtils';
 import { parseMd } from '@/lib/md/remark';
-import {
-  createRongMotamhonBrowserPage,
-  getReadmeContentHtml,
-  gotoWithRetry,
-} from '@/sites/rongmotamhon.net/browserUtils';
 
 const getPageContentMdVie: WorkerHandlerFn<
   GetPageContentParams,
@@ -29,18 +27,41 @@ const getPageContentMdVie: WorkerHandlerFn<
 > = async ({ resourceHref }) => {
   const { href } = resourceHref;
 
-  const { browser, context, page } = await createRongMotamhonBrowserPage({
-    blockAds: true,
-  });
+  const browser = await chromium.launch();
+  const context = await browser.newContext(devices['Desktop Chrome']);
+  const page = await context.newPage();
 
   try {
-    await gotoWithRetry(page, href);
+    await PlaywrightBlocker.fromPrebuiltAdsAndTracking(fetch).then(
+      (blocker) => {
+        blocker.enableBlockingInPage(page);
+      },
+    );
 
-    const bodyHtml = await getReadmeContentHtml(page);
+    await retry(
+      async () => {
+        await page.goto(href, {
+          waitUntil: 'domcontentloaded',
+          timeout: 5 * 36000,
+        });
+      },
+      {
+        retries: 5,
+      },
+    );
 
-    if (!bodyHtml.trim()) {
+    const bodyLocator = page.locator('[id="readme"]');
+
+    if (!(await bodyLocator.count())) {
       return '';
     }
+
+    await bodyLocator.evaluate((el) => {
+      // NOTE: Remove first bold element which is the title
+      el.querySelector('b')?.firstChild?.remove();
+    });
+
+    const bodyHtml = await bodyLocator.innerHTML();
 
     const md = await parseMd(bodyHtml);
 

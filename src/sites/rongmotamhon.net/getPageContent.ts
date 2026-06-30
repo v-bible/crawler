@@ -1,5 +1,7 @@
 /* eslint-disable no-restricted-syntax */
+import { PlaywrightBlocker } from '@ghostery/adblocker-playwright';
 import { retry } from 'es-toolkit';
+import { chromium, devices } from 'playwright';
 import { type GetPageContentParams } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
 import { type LogContext, logError } from '@/lib/crawler/logUtils';
@@ -11,11 +13,6 @@ import {
 import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
 import { pageToChapterTree } from '@/lib/crawler/treeUtils';
 import { type WorkerHandlerFn } from '@/lib/crawler/worker';
-import {
-  createRongMotamhonBrowserPage,
-  getReadmeContentHtml,
-  gotoWithRetry,
-} from '@/sites/rongmotamhon.net/browserUtils';
 
 const fetchHtmlContent = async (url: string) => {
   let group = 0;
@@ -46,6 +43,7 @@ const fetchHtmlContent = async (url: string) => {
         return res;
       },
       {
+        delay: 500,
         retries: 500,
       },
     );
@@ -72,12 +70,28 @@ const getPageContent: WorkerHandlerFn<
 > = async ({ resourceHref, chapterParams }, metadata) => {
   const { href } = resourceHref;
 
-  const { browser, context, page } = await createRongMotamhonBrowserPage({
-    blockAds: true,
-  });
+  const browser = await chromium.launch();
+  const context = await browser.newContext(devices['Desktop Chrome']);
+  const page = await context.newPage();
 
   try {
-    await gotoWithRetry(page, href);
+    await PlaywrightBlocker.fromPrebuiltAdsAndTracking(fetch).then(
+      (blocker) => {
+        blocker.enableBlockingInPage(page);
+      },
+    );
+
+    await retry(
+      async () => {
+        await page.goto(href, {
+          waitUntil: 'domcontentloaded',
+          timeout: 5 * 36000,
+        });
+      },
+      {
+        retries: 5,
+      },
+    );
 
     const chinesePageLink = await page
       .locator('a', {
@@ -96,7 +110,17 @@ const getPageContent: WorkerHandlerFn<
     let htmlBody = '';
 
     try {
-      await gotoWithRetry(page, chinesePageLink);
+      await retry(
+        async () => {
+          await page.goto(chinesePageLink, {
+            waitUntil: 'domcontentloaded',
+            timeout: 5 * 36000,
+          });
+        },
+        {
+          retries: 5,
+        },
+      );
 
       // NOTE: Get resource URL to pass to fetchHtmlContent to avoid issues with
       // referer when fetching from node
@@ -127,18 +151,8 @@ const getPageContent: WorkerHandlerFn<
       waitUntil: 'domcontentloaded',
     });
 
-    const readmeContentHtml = await getReadmeContentHtml(page);
-
-    if (!readmeContentHtml.trim()) {
-      throw new Error('Chinese content body not found');
-    }
-
-    // Bulk scrape all character data at once using page.evaluate
-    const charactersData = await page.evaluate((contentHtml) => {
-      const wrapper = document.createElement('div');
-      wrapper.innerHTML = contentHtml;
-
-      const links = Array.from(wrapper.querySelectorAll('a'));
+    const charactersData = await page.evaluate(() => {
+      const links = Array.from(document.querySelectorAll('a'));
 
       return links
         .map((link, index, array) => {
@@ -182,7 +196,7 @@ const getPageContent: WorkerHandlerFn<
           };
         })
         .filter((item) => item.chineseCharacter !== ''); // Filter out any items that are completely empty
-    }, readmeContentHtml);
+    });
 
     // Process the scraped data to build sentences
     const sentences: MultiLanguageSentence[] = [];
