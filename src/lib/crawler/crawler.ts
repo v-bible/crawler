@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import { groupBy, shuffle } from 'es-toolkit';
 import { Logger } from 'winston';
@@ -248,6 +248,8 @@ class Crawler {
   }
 
   private async checkManifestList() {
+    logger.info('Checking manifest files...');
+
     const { filteredCheckpoint: data } = await this.getData({
       options: {
         forceAll: true,
@@ -560,6 +562,8 @@ class Crawler {
 
         const subtasks = checkpoint.subtasks || [];
 
+        const failedCheckpoint: Set<string> = new Set();
+
         // NOTE: Process subtasks concurrently with a strict limit
         await runWithConcurrency(
           // NOTE: Shuffle the subtasks to avoid processing them in a predictable order
@@ -585,11 +589,27 @@ class Crawler {
             await new Worker({
               shardIndex,
               handlers: this.handlers.map((handler) => ({
-                ...handler,
+                handler: {
+                  ...handler.handler,
+                  onError: (error, log) => {
+                    handler.handler.onError?.(error, log);
+
+                    failedCheckpoint.add(checkpoint.id);
+
+                    log?.error(
+                      `Error occurred while processing subtask ${subtask.id} for checkpoint ${checkpoint.id}: ${error.message}`,
+                      {
+                        checkpointId: checkpoint.id,
+                        subtaskId: subtask.id,
+                        error,
+                      },
+                    );
+                  },
+                },
                 stringify: handler.stringify?.map((stringify) => {
                   return {
                     ...stringify,
-                    onFinish: (content) => {
+                    onFinish: (content, log) => {
                       stringify.onFinish?.(content);
 
                       if (stringify.output) {
@@ -604,23 +624,37 @@ class Crawler {
                           manifestFileName,
                         );
 
+                        mkdirSync(path.dirname(manifestFilePath), {
+                          recursive: true,
+                        });
+
                         writeFileSync(manifestFilePath, content);
+
+                        log?.info(
+                          `File written successfully to ${manifestFilePath}`,
+                        );
                       }
+                    },
+                    onError: (error: Error, log?: Logger) => {
+                      stringify.onError?.(error, log);
+
+                      failedCheckpoint.add(checkpoint.id);
+
+                      log?.error(
+                        `Error occurred while processing subtask ${subtask.id} for checkpoint ${checkpoint.id}: ${error.message}`,
+                        {
+                          checkpointId: checkpoint.id,
+                          subtaskId: subtask.id,
+                          error,
+                        },
+                      );
                     },
                   };
                 }),
-                onStringifyFinish: (log?: Logger) => {
-                  handler.onStringifyFinish?.(log);
-                  setSubtaskComplete(checkpoint.id, subtask.id, true);
-                },
-                onStringifyError: (error: Error, log?: Logger) => {
-                  handler.onStringifyError?.(error, log);
-                  logger.error(
-                    `Error in stringify for chapter ${chapterParams.chapterNumber} of document ${metadata.documentId}:`,
-                    { href, error },
-                  );
-                },
               })),
+              onWorkerSuccess: () => {
+                setSubtaskComplete(checkpoint.id, subtask.id, true);
+              },
             }).run(
               {
                 resourceHref: { href, props },
@@ -631,7 +665,13 @@ class Crawler {
           },
         );
 
-        setCheckpointComplete(checkpoint.id, true);
+        if (
+          [...failedCheckpoint].some(
+            (failedId) => failedId === checkpoint.id,
+          ) === false
+        ) {
+          setCheckpointComplete(checkpoint.id, true);
+        }
       },
     );
 
