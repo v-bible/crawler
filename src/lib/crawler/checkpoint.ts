@@ -25,6 +25,8 @@ export type WithCheckpointOptions<TTask extends Record<string, unknown>> = {
   forceAll?: boolean;
   // NOTE: If provided, will return only checkpoints with these ids
   forceCheckpointId?: Checkpoint<TTask>['id'][];
+  // NOTE: If true, will force all subtasks to be returned regardless of completion status
+  forceAllSubtasks?: boolean;
 };
 
 export type WithCheckpointParams<
@@ -93,7 +95,11 @@ const withCheckpoint = async <
 }: WithCheckpointParams<TTask, TSubtask>): Promise<
   WithCheckpointReturn<TTask, TSubtask>
 > => {
-  const { forceAll = false, forceCheckpointId = [] } = options || {};
+  const {
+    forceAll = false,
+    forceCheckpointId = [],
+    forceAllSubtasks = false,
+  } = options || {};
 
   log = log || logger;
 
@@ -200,7 +206,9 @@ const withCheckpoint = async <
       continue;
     }
 
-    if (filterSubtasks) {
+    if (forceAllSubtasks) {
+      filteredSubtasks = checkpoint.subtasks;
+    } else if (filterSubtasks) {
       // If filterSubtasks is provided, filter the subtasks accordingly
       filteredSubtasks = checkpoint.subtasks.filter(filterSubtasks);
     }

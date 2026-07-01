@@ -5,9 +5,6 @@ module.exports = {
     'plugin:import/typescript',
     'plugin:jsx-a11y/recommended',
     'plugin:prettier/recommended',
-    'plugin:react-hooks/recommended',
-    'plugin:react/jsx-runtime',
-    'plugin:react/recommended',
     'plugin:@typescript-eslint/recommended',
     'plugin:playwright/playwright-test',
   ],
@@ -24,7 +21,7 @@ module.exports = {
       './tsconfig.node.json', // Include .eslintrc.js file
     ],
   },
-  plugins: ['react', 'import', 'prettier'],
+  plugins: ['import', 'prettier'],
   rules: {
     'import/extensions': [
       'warn',
@@ -66,7 +63,6 @@ module.exports = {
         endOfLine: 'auto',
       },
     ],
-    'react/jsx-sort-props': 'warn',
     'sort-imports': [
       'warn',
       {

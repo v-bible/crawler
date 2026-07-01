@@ -5,6 +5,7 @@ import { getLogContext, logWarn } from '@/lib/crawler/logUtils';
 import {
   type Footnote,
   type Heading,
+  type Metadata,
   type Page,
   type SingleLanguageSentence,
 } from '@/lib/crawler/schema';
@@ -30,8 +31,9 @@ import { winkNLPInstance } from '@/lib/wink-nlp';
 
 const getPageContent: WorkerHandlerFn<
   GetPageContentParams,
-  ChapterTreeOutput
-> = async ({ resourceHref, chapterParams, metadata }) => {
+  ChapterTreeOutput,
+  Metadata
+> = async ({ resourceHref, chapterParams }, metadata) => {
   const {
     verses,
     marks: footnotes = [],

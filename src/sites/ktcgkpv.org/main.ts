@@ -1,9 +1,10 @@
 import { DEFAULT_METADATA_FILE_PATH } from '@/constants';
 import { Crawler } from '@/lib/crawler/crawler';
 import { getMetadataFromCSV } from '@/lib/crawler/crawlerUtils';
+import { getDefaultDocumentPath } from '@/lib/crawler/fileUtils';
 import { sortCheckpointAsc } from '@/lib/crawler/sortUtils';
 import { stringifyJsonTree, stringifyXmlTree } from '@/lib/crawler/treeUtils';
-import { defineHandler } from '@/lib/crawler/worker';
+import { defineGetFileNameFunction, defineHandler } from '@/lib/crawler/worker';
 import { getChapters } from '@/sites/ktcgkpv.org/getChapters';
 import { getPageContent } from '@/sites/ktcgkpv.org/getPageContent';
 
@@ -28,10 +29,18 @@ export const crawler = new Crawler({
         {
           name: 'json',
           fn: stringifyJsonTree,
+          output: {
+            extension: 'json',
+            getFileName: defineGetFileNameFunction(getDefaultDocumentPath),
+          },
         },
         {
           name: 'xml',
           fn: stringifyXmlTree,
+          output: {
+            extension: 'xml',
+            getFileName: defineGetFileNameFunction(getDefaultDocumentPath),
+          },
         },
       ],
     }),
@@ -47,6 +56,17 @@ export const crawler = new Crawler({
           return md;
         },
       },
+      // REVIEW: Need to review
+      stringify: [
+        {
+          name: 'md',
+          fn: (content) => content,
+          output: {
+            extension: 'md',
+            getFileName: defineGetFileNameFunction(getDefaultDocumentPath),
+          },
+        },
+      ],
     }),
   ],
 });

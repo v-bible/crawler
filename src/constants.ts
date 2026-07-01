@@ -32,4 +32,11 @@ export const DEFAULT_CHECKPOINT_FILE_PATH = path.join(
 );
 
 // Timeouts
+export const DEFAULT_TIMEOUT = 1000 * 60 * 30; // 30 minutes
 export const DEFAULT_CRAWL_COUNT = 5;
+export const DEFAULT_SUB_TASK_CONCURRENCY_LIMIT = 5;
+
+// Misc
+export const DEFAULT_ONLY_CHECK_MANIFEST = false;
+export const DEFAULT_RECRAWL_ALLOW_MISSING_MANIFEST = false;
+export const DEFAULT_ALLOW_MISSING_MANIFEST = false;

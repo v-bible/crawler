@@ -1,8 +1,7 @@
 /* eslint-disable no-await-in-loop */
 /* eslint-disable no-restricted-syntax */
-import retry from 'async-retry';
 import { format, parse } from 'date-fns';
-import { uniqBy } from 'es-toolkit';
+import { retry, uniqBy } from 'es-toolkit';
 import { chromium, devices } from 'playwright';
 import z from 'zod';
 import { getDocumentId } from '@/lib/crawler/getId';

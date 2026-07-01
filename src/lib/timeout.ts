@@ -1,23 +1,27 @@
 const withTimeout = async <T>(
-  taskFn: () => Promise<T>,
+  taskFn: (signal?: AbortSignal) => Promise<T>,
   timeoutMs: number,
   timeoutMessage = 'Operation timed out',
 ): Promise<T> => {
-  let timeoutHandle: NodeJS.Timeout | null = null;
-
-  const taskPromise = Promise.resolve().then(() => taskFn());
+  const controller = new AbortController();
+  const { signal } = controller;
 
   const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutHandle = setTimeout(() => {
+    const timer = setTimeout(() => {
+      controller.abort(); // Fire the abort event
       reject(new Error(timeoutMessage));
     }, timeoutMs);
+
+    signal.addEventListener('abort', () => clearTimeout(timer));
   });
 
   try {
-    const res = await Promise.race([taskPromise, timeoutPromise]);
-    return res as T;
-  } finally {
-    if (timeoutHandle) clearTimeout(timeoutHandle);
+    // Pass the signal. Existing handlers will just ignore it.
+    // New/updated handlers can choose to accept it.
+    return await Promise.race([taskFn(signal), timeoutPromise]);
+  } catch (error) {
+    controller.abort();
+    throw error;
   }
 };
 

@@ -1,8 +1,9 @@
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable no-continue */
-import retry from 'async-retry';
+import { retry } from 'es-toolkit';
 import { chromium, devices } from 'playwright';
 import { type GetPageContentParams } from '@/lib/crawler/crawler';
+import { type Metadata } from '@/lib/crawler/schema';
 import { WorkerHandlerFn } from '@/lib/crawler/worker';
 import {
   cleanupMdProcessor,
@@ -18,9 +19,11 @@ import {
 } from '@/lib/md/mdUtils';
 import { parseMd } from '@/lib/md/remark';
 
-const getPageContentMd: WorkerHandlerFn<GetPageContentParams, string> = async ({
-  resourceHref,
-}) => {
+const getPageContentMd: WorkerHandlerFn<
+  GetPageContentParams,
+  string,
+  Metadata
+> = async ({ resourceHref }) => {
   const { href } = resourceHref;
 
   const browser = await chromium.launch();

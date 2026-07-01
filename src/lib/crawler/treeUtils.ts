@@ -88,10 +88,7 @@ export type StringifyTreeFunction = (
   tree: ChapterTreeOutput,
   options?: object,
   log?: Logger,
-) => {
-  content: string;
-  extension: string;
-};
+) => string;
 
 const stringifyXmlTree: StringifyTreeFunction = (chapterTree) => {
   const xmlTree = x(
@@ -287,14 +284,11 @@ const stringifyXmlTree: StringifyTreeFunction = (chapterTree) => {
 
   // Convert the tree to XML string
   // REVIEW: Might have some "<" in the sentence, not the "<" opening tag
-  return {
-    content: toXml(xmlTree).replaceAll('&#x3C;', '<').trim(),
-    extension: 'xml',
-  };
+  return toXml(xmlTree).replaceAll('&#x3C;', '<').trim();
 };
 
 const stringifyJsonTree: StringifyTreeFunction = (chapterTree) => {
-  return { content: JSON.stringify(chapterTree, null, 2), extension: 'json' };
+  return JSON.stringify(chapterTree, null, 2);
 };
 
 const stringifyCsvTree: StringifyTreeFunction = (
@@ -331,7 +325,7 @@ const stringifyCsvTree: StringifyTreeFunction = (
     });
   });
 
-  return { content: csvContent.trim(), extension: 'csv' };
+  return csvContent.trim();
 };
 
 const generateDataTree = ((

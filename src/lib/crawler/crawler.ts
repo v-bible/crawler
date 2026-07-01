@@ -1,22 +1,26 @@
 import { randomUUID } from 'crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
-import { chunk } from 'es-toolkit';
+import { groupBy, shuffle } from 'es-toolkit';
 import { Logger } from 'winston';
 import { ZodError, z } from 'zod';
 import {
+  DEFAULT_ALLOW_MISSING_MANIFEST,
   DEFAULT_CHECKPOINT_DIR,
   DEFAULT_CRAWL_COUNT,
+  DEFAULT_ONLY_CHECK_MANIFEST,
   DEFAULT_OUTPUT_FILE_DIR,
+  DEFAULT_RECRAWL_ALLOW_MISSING_MANIFEST,
+  DEFAULT_SUB_TASK_CONCURRENCY_LIMIT,
 } from '@/constants';
 import {
   type Checkpoint,
   type WithCheckpointOptions,
+  WithCheckpointParams,
   withCheckpoint,
 } from '@/lib/crawler/checkpoint';
-import {
-  writeChapterContent,
-  writeChapterContentBuffer,
-} from '@/lib/crawler/fileUtils';
+import { readCheckpointFile } from '@/lib/crawler/checkpointFileUtils';
+import { type GetDefaultDocumentPathFunction } from '@/lib/crawler/fileUtils';
 import { defaultFilterCheckpoint } from '@/lib/crawler/filterUtils';
 import {
   type ChapterParams,
@@ -28,8 +32,31 @@ import {
 } from '@/lib/crawler/schema';
 import { sortCheckpointAsc } from '@/lib/crawler/sortUtils';
 import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
-import { Worker, type WorkerHandler } from '@/lib/crawler/worker';
+import {
+  type GetFileNameFunction,
+  Worker,
+  type WorkerHandler,
+} from '@/lib/crawler/worker';
 import { logger } from '@/logger/logger';
+
+export type CrawlerWorkerHandler<TData, TOutput, TMeta> = WorkerHandler<
+  TData,
+  TOutput,
+  TMeta
+> & {
+  handler: WorkerHandler<TData, TOutput, TMeta>['handler'] & {
+    output?: {
+      extension: string;
+      getFileName: GetFileNameFunction<
+        ChapterParams & {
+          extension: string;
+          documentTitle?: string;
+          suffix?: string;
+        }
+      >;
+    };
+  };
+};
 
 export type CrawHref<T = Record<string, string>> = {
   href: string;
@@ -62,18 +89,19 @@ export type SortSubtasksFunction = (
 
 export type GetChaptersFunction<
   T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
-> = (params: {
-  resourceHref: CrawHref;
-  documentParams?: DocumentParams;
-  metadata?: Metadata;
-}) => Promise<Required<T>[]>;
+> = (
+  params: {
+    resourceHref: CrawHref;
+    documentParams?: DocumentParams;
+  },
+  metadata: Metadata,
+) => Promise<Required<T>[]>;
 
 export type GetPageContentParams<
   T extends GetChaptersFunctionHref = GetChaptersFunctionHref,
 > = {
   resourceHref: T;
   chapterParams: ChapterParams;
-  metadata: Metadata;
 };
 
 type CrawlerArgs = Omit<GenreParams, 'genre'> & {
@@ -88,15 +116,35 @@ type CrawlerArgs = Omit<GenreParams, 'genre'> & {
   skipSubtaskCheckpointCheck?: boolean;
   getChapters: GetChaptersFunction;
   handlers: Array<
-    | WorkerHandler<GetPageContentParams, ChapterTreeOutput>
-    | WorkerHandler<GetPageContentParams, string>
-    | WorkerHandler<GetPageContentParams, void>
+    | CrawlerWorkerHandler<GetPageContentParams, ChapterTreeOutput, Metadata>
+    | CrawlerWorkerHandler<GetPageContentParams, string, Metadata>
+    | CrawlerWorkerHandler<GetPageContentParams, void, Metadata>
   >;
   checkpointFilePath?: string;
   outputFileDir?: string;
   checkpointOptions?: WithCheckpointOptions<Metadata>;
   crawlerCount?: number;
+  subTaskConcurrencyLimit?: number;
+  onlyCheckManifest?: boolean;
+  recrawlAllowMissingManifest?: boolean;
 };
+
+async function runWithConcurrency<T>(
+  items: Iterable<T> | AsyncIterable<T>,
+  limit: number,
+  task: (item: T) => Promise<void>,
+): Promise<void> {
+  const executing = new Set<Promise<void>>();
+  // eslint-disable-next-line no-restricted-syntax
+  for await (const item of items) {
+    const promise = task(item).finally(() => executing.delete(promise));
+    executing.add(promise);
+    if (executing.size >= limit) {
+      await Promise.race(executing); // Wait for at least one to finish before adding more
+    }
+  }
+  await Promise.all(executing); // Drain the remaining promises
+}
 
 class Crawler {
   name: string;
@@ -107,7 +155,11 @@ class Crawler {
 
   outputFileDir: string;
 
-  metadataList: Metadata[] = [];
+  manifestList: {
+    documentId: string;
+    chapterNumber: number;
+    filePath: string;
+  }[] = [];
 
   getMetadata: GetMetadataListFunction;
 
@@ -128,9 +180,9 @@ class Crawler {
   getChapters: GetChaptersFunction;
 
   handlers: Array<
-    | WorkerHandler<GetPageContentParams, ChapterTreeOutput>
-    | WorkerHandler<GetPageContentParams, string>
-    | WorkerHandler<GetPageContentParams, void>
+    | CrawlerWorkerHandler<GetPageContentParams, ChapterTreeOutput, Metadata>
+    | CrawlerWorkerHandler<GetPageContentParams, string, Metadata>
+    | CrawlerWorkerHandler<GetPageContentParams, void, Metadata>
   >;
 
   checkpointOptions: WithCheckpointOptions<Metadata>;
@@ -139,7 +191,13 @@ class Crawler {
 
   crawlerCount: number;
 
+  subTaskConcurrencyLimit: number;
+
   runId?: string;
+
+  onlyCheckManifest?: boolean;
+
+  recrawlAllowMissingManifest?: boolean;
 
   constructor(args: CrawlerArgs) {
     this.name = args.name;
@@ -177,17 +235,231 @@ class Crawler {
     this.checkpointOptions = args.checkpointOptions || {};
 
     this.crawlerCount = args.crawlerCount || DEFAULT_CRAWL_COUNT;
+
+    this.subTaskConcurrencyLimit =
+      args.subTaskConcurrencyLimit || DEFAULT_SUB_TASK_CONCURRENCY_LIMIT;
+
+    this.onlyCheckManifest =
+      args.onlyCheckManifest || DEFAULT_ONLY_CHECK_MANIFEST;
+
+    this.recrawlAllowMissingManifest =
+      args.recrawlAllowMissingManifest ||
+      DEFAULT_RECRAWL_ALLOW_MISSING_MANIFEST;
   }
 
-  async run() {
-    this.runId = randomUUID();
+  private async checkManifestList() {
+    logger.info('Checking manifest files...');
 
+    const { filteredCheckpoint: data } = await this.getData({
+      options: {
+        forceAll: true,
+        forceAllSubtasks: true,
+      },
+    });
+
+    let manifestFile: {
+      documentId: string;
+      chapterNumber: number;
+      filePath: string;
+      allowMissing?: boolean;
+    }[] = [];
+
+    await runWithConcurrency(data, this.crawlerCount, async (checkpoint) => {
+      const metadata = checkpoint.params;
+
+      const documentParams = {
+        ...this.domainParams,
+        genre: metadata.genre.code,
+        documentNumber: +metadata.documentNumber,
+      };
+
+      await runWithConcurrency(
+        checkpoint.subtasks || [],
+        this.subTaskConcurrencyLimit,
+        async (subtask) => {
+          const { href, props } = subtask.params;
+
+          const chapterParams = {
+            ...documentParams,
+            chapterNumber: props?.chapterNumber || 1,
+            chapterName: props?.chapterName || '',
+          };
+
+          const getFileNameParams = {
+            ...chapterParams,
+            documentTitle: metadata.title,
+          } satisfies Omit<
+            Parameters<GetDefaultDocumentPathFunction>['0'],
+            'extension'
+          >;
+
+          await new Worker({
+            handlers: this.handlers.map((handler) => ({
+              handler: {
+                ...handler.handler,
+                fn: () => Promise.resolve({}),
+                onStart: () => {
+                  if (handler.handler.output) {
+                    const manifestFileName = handler.handler.output.getFileName(
+                      {
+                        ...getFileNameParams,
+                        extension: handler.handler.output.extension,
+                        suffix: handler.handler.output.suffix,
+                      },
+                    );
+
+                    const manifestFilePath = path.join(
+                      this.outputFileDir,
+                      manifestFileName,
+                    );
+
+                    manifestFile = manifestFile.concat({
+                      documentId: metadata.documentId,
+                      chapterNumber: chapterParams.chapterNumber,
+                      filePath: manifestFilePath,
+                      allowMissing:
+                        handler.handler.output.allowMissing ||
+                        DEFAULT_ALLOW_MISSING_MANIFEST,
+                    });
+                  }
+                },
+              },
+              stringify: handler.stringify?.map((stringify) => {
+                return {
+                  ...stringify,
+                  fn: () => '',
+                  onStart: () => {
+                    if (stringify.output) {
+                      const manifestFileName = stringify.output.getFileName({
+                        ...getFileNameParams,
+                        extension: stringify.output.extension,
+                        suffix: stringify.output.suffix,
+                      });
+
+                      const manifestFilePath = path.join(
+                        this.outputFileDir,
+                        manifestFileName,
+                      );
+
+                      manifestFile = manifestFile.concat({
+                        documentId: metadata.documentId,
+                        chapterNumber: chapterParams.chapterNumber,
+                        filePath: manifestFilePath,
+                        allowMissing:
+                          stringify.output.allowMissing ||
+                          DEFAULT_ALLOW_MISSING_MANIFEST,
+                      });
+                    }
+                  },
+                };
+              }),
+            })),
+          }).run(
+            {
+              resourceHref: { href, props },
+              chapterParams,
+            },
+            metadata,
+          );
+        },
+      );
+    });
+
+    const missingManifests = manifestFile.filter((manifest) => {
+      if (!existsSync(manifest.filePath)) {
+        return true;
+      }
+
+      const buffer = readFileSync(manifest.filePath);
+      // NOTE: Check non-empty file
+      return buffer.length === 0;
+    });
+
+    missingManifests.forEach((manifest) => {
+      logger.warn(
+        `Manifest file ${manifest.allowMissing ? 'is allowed to be missing' : 'is missing'} for document ${manifest.documentId}, chapter ${manifest.chapterNumber}: ${manifest.filePath}`,
+      );
+    });
+
+    if (missingManifests.length > 0) {
+      const groupByDocumentId = groupBy(
+        missingManifests,
+        (manifest) => manifest.documentId,
+      );
+      const groupByChapterNumber = groupBy(
+        missingManifests,
+        (manifest) => manifest.chapterNumber,
+      );
+
+      const missingTaskCount = Object.keys(groupByDocumentId).length;
+      const missingSubtaskCount = Object.keys(groupByChapterNumber).length;
+      const allowMissingCount = missingManifests.filter(
+        (manifest) => manifest.allowMissing,
+      ).length;
+
+      logger.info(
+        `Total missing manifest files: ${missingManifests.length}. Missing manifests by document: ${missingTaskCount}. Missing manifests by chapter: ${missingSubtaskCount}. Allowed missing manifests: ${allowMissingCount}. Updating checkpoint file...`,
+      );
+    } else {
+      logger.info('All manifest files are present.');
+    }
+
+    // NOTE: Update completed state of subtasks in the checkpoint file for missing manifests
+    const checkpointData = await readCheckpointFile<
+      Metadata,
+      GetChaptersFunctionHref
+    >(this.checkpointFilePath);
+
+    const updatedCheckpointData = checkpointData.map((checkpoint) => {
+      const updatedSubtasks = checkpoint.subtasks?.map((subtask) => {
+        const manifestExists = !missingManifests.some((manifest) => {
+          if (
+            manifest.documentId === checkpoint.params.documentId &&
+            manifest.chapterNumber === subtask.params.props?.chapterNumber
+          ) {
+            if (manifest.allowMissing && !this.recrawlAllowMissingManifest) {
+              return false; // Allow missing manifest and recrawl is not enabled, so treat it as existing
+            }
+            if (manifest.allowMissing && this.recrawlAllowMissingManifest) {
+              return true; // Allow missing manifest and recrawl is enabled, so treat it as missing
+            }
+
+            return true; // Manifest is missing and not allowed to be missing
+          }
+
+          return false; // Manifest is not related to this subtask
+        });
+
+        return {
+          ...subtask,
+          completed: manifestExists,
+        };
+      });
+
+      const updateCheckpointCompleted = updatedSubtasks?.every(
+        (subtask) => subtask.completed,
+      );
+
+      return {
+        ...checkpoint,
+        subtasks: updatedSubtasks,
+        completed: updateCheckpointCompleted,
+      };
+    });
+
+    writeFileSync(
+      this.checkpointFilePath,
+      JSON.stringify(updatedCheckpointData, null, 2),
+    );
+  }
+
+  getData(
+    checkpointParams?: Partial<
+      WithCheckpointParams<Metadata, GetChaptersFunctionHref>
+    >,
+  ) {
     // NOTE: Get saved checkpoint
-    const {
-      filteredCheckpoint: metadataCheckpoint,
-      setSubtaskComplete,
-      setCheckpointComplete,
-    } = await withCheckpoint<Metadata, GetChaptersFunctionHref>({
+    return withCheckpoint<Metadata, GetChaptersFunctionHref>({
       getInitialData: this.getMetadata,
 
       getSubtaskData: async (checkpoint) => {
@@ -221,11 +493,13 @@ class Crawler {
 
         if (metadata.hasChapters) {
           try {
-            chapterCrawlList = await this.getChapters({
-              resourceHref: { href: metadata.sourceURL },
-              documentParams,
+            chapterCrawlList = await this.getChapters(
+              {
+                resourceHref: { href: metadata.sourceURL },
+                documentParams,
+              },
               metadata,
-            });
+            );
           } catch (error) {
             logger.error(
               `Error getting chapters for document ${metadata.documentId}:`,
@@ -253,24 +527,50 @@ class Crawler {
       skipSubtaskCheckpointCheck: this.skipSubtaskCheckpointCheck,
       checkpointFilePath: this.checkpointFilePath,
       options: this.checkpointOptions,
+
+      ...checkpointParams,
     });
+  }
 
-    const shardSize = Math.ceil(metadataCheckpoint.length / this.crawlerCount);
-    const metadataShards = chunk(metadataCheckpoint, shardSize);
+  async run() {
+    if (this.onlyCheckManifest) {
+      await this.checkManifestList();
+      return;
+    }
 
-    await Promise.all(
-      metadataShards.map(async (metadataShard, shardIndex) => {
-        // eslint-disable-next-line no-restricted-syntax
-        for await (const checkpoint of metadataShard) {
-          // eslint-disable-next-line no-restricted-syntax
-          for await (const subtask of checkpoint.subtasks || []) {
+    this.runId = randomUUID();
+
+    // NOTE: Get saved checkpoint
+    const {
+      filteredCheckpoint: metadataCheckpoint,
+      setSubtaskComplete,
+      setCheckpointComplete,
+    } = await this.getData();
+
+    await runWithConcurrency(
+      shuffle(metadataCheckpoint).entries(),
+      this.crawlerCount,
+      async ([shardIndex, checkpoint]) => {
+        const metadata = checkpoint.params;
+
+        // NOTE: Hoist invariant variables out of the inner loop
+        const documentParams = {
+          ...this.domainParams,
+          genre: metadata.genre.code,
+          documentNumber: +metadata.documentNumber,
+        };
+
+        const subtasks = checkpoint.subtasks || [];
+
+        const failedCheckpoint: Set<string> = new Set();
+
+        // NOTE: Process subtasks concurrently with a strict limit
+        await runWithConcurrency(
+          // NOTE: Shuffle the subtasks to avoid processing them in a predictable order
+          shuffle(subtasks),
+          this.subTaskConcurrencyLimit,
+          async (subtask) => {
             const { href, props } = subtask.params;
-
-            const documentParams = {
-              ...this.domainParams,
-              genre: checkpoint.params.genre.code,
-              documentNumber: +checkpoint.params.documentNumber,
-            };
 
             const chapterParams = {
               ...documentParams,
@@ -278,75 +578,104 @@ class Crawler {
               chapterName: props?.chapterName || '',
             };
 
+            const getFileNameParams = {
+              ...chapterParams,
+              documentTitle: metadata.title,
+            } satisfies Omit<
+              Parameters<GetDefaultDocumentPathFunction>['0'],
+              'extension'
+            >;
+
             await new Worker({
               shardIndex,
               handlers: this.handlers.map((handler) => ({
-                ...handler,
+                handler: {
+                  ...handler.handler,
+                  onError: (error, log) => {
+                    handler.handler.onError?.(error, log);
+
+                    failedCheckpoint.add(checkpoint.id);
+
+                    log?.error(
+                      `Error occurred while processing subtask ${subtask.id} for checkpoint ${checkpoint.id}: ${error.message}`,
+                      {
+                        checkpointId: checkpoint.id,
+                        subtaskId: subtask.id,
+                        error,
+                      },
+                    );
+                  },
+                },
                 stringify: handler.stringify?.map((stringify) => {
                   return {
                     ...stringify,
-                    onFinish: (
-                      content,
-                      extension,
-                      getFileName,
-                      log?: Logger,
-                    ) => {
-                      stringify.onFinish?.(
-                        content,
-                        extension,
-                        getFileName,
-                        log,
-                      );
+                    onFinish: (content, log) => {
+                      stringify.onFinish?.(content);
 
-                      if (typeof content === 'string') {
-                        writeChapterContent({
-                          getFileName,
-                          params: chapterParams,
-                          content,
-                          extension,
-                          documentTitle: checkpoint.params.title,
-                          baseDir: this.outputFileDir,
+                      if (stringify.output) {
+                        const manifestFileName = stringify.output.getFileName({
+                          ...getFileNameParams,
+                          extension: stringify.output.extension,
+                          suffix: stringify.output.suffix,
                         });
-                      } else if (Buffer.isBuffer(content)) {
-                        writeChapterContentBuffer({
-                          getFileName,
-                          params: chapterParams,
-                          content,
-                          extension,
-                          documentTitle: checkpoint.params.title,
-                          baseDir: this.outputFileDir,
+
+                        const manifestFilePath = path.join(
+                          this.outputFileDir,
+                          manifestFileName,
+                        );
+
+                        mkdirSync(path.dirname(manifestFilePath), {
+                          recursive: true,
                         });
+
+                        writeFileSync(manifestFilePath, content);
+
+                        log?.info(
+                          `File written successfully to ${manifestFilePath}`,
+                        );
                       }
+                    },
+                    onError: (error: Error, log?: Logger) => {
+                      stringify.onError?.(error, log);
+
+                      failedCheckpoint.add(checkpoint.id);
+
+                      log?.error(
+                        `Error occurred while processing subtask ${subtask.id} for checkpoint ${checkpoint.id}: ${error.message}`,
+                        {
+                          checkpointId: checkpoint.id,
+                          subtaskId: subtask.id,
+                          error,
+                        },
+                      );
                     },
                   };
                 }),
-                onStringifyFinish: (log?: Logger) => {
-                  handler.onStringifyFinish?.(log);
-                  setSubtaskComplete(checkpoint.id, subtask.id, true);
-                },
-                onStringifyError: (error: Error, log?: Logger) => {
-                  handler.onStringifyError?.(error, log);
-                  logger.error(
-                    `Error in stringify for chapter ${chapterParams.chapterNumber} of document ${checkpoint.params.documentId}:`,
-                    {
-                      href,
-                      error,
-                    },
-                    error,
-                  );
-                },
               })),
-            }).run({
-              resourceHref: { href, props },
-              chapterParams,
-              metadata: checkpoint.params,
-            });
+              onWorkerSuccess: () => {
+                setSubtaskComplete(checkpoint.id, subtask.id, true);
+              },
+            }).run(
+              {
+                resourceHref: { href, props },
+                chapterParams,
+              },
+              metadata,
+            );
+          },
+        );
 
-            setCheckpointComplete(checkpoint.id, true);
-          }
+        if (
+          [...failedCheckpoint].some(
+            (failedId) => failedId === checkpoint.id,
+          ) === false
+        ) {
+          setCheckpointComplete(checkpoint.id, true);
         }
-      }),
+      },
     );
+
+    await this.checkManifestList();
   }
 }
 
