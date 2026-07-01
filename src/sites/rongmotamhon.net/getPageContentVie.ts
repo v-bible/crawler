@@ -18,7 +18,7 @@ const getPageContentVie: WorkerHandlerFn<
   GetPageContentParams,
   ChapterTreeOutput,
   Metadata
-> = async ({ resourceHref, chapterParams }, metadata) => {
+> = async ({ resourceHref, chapterParams }, metadata, signal) => {
   const { href } = resourceHref;
 
   const browser = await chromium.launch();
@@ -41,6 +41,7 @@ const getPageContentVie: WorkerHandlerFn<
       },
       {
         retries: 5,
+        signal,
       },
     );
 

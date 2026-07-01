@@ -14,7 +14,7 @@ import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
 import { pageToChapterTree } from '@/lib/crawler/treeUtils';
 import { type WorkerHandlerFn } from '@/lib/crawler/worker';
 
-const fetchHtmlContent = async (url: string) => {
+const fetchHtmlContent = async (url: string, signal?: AbortSignal) => {
   let group = 0;
   let content = '';
 
@@ -45,6 +45,10 @@ const fetchHtmlContent = async (url: string) => {
       {
         delay: 500,
         retries: 500,
+        shouldRetry: () => {
+          signal?.throwIfAborted();
+          return true;
+        },
       },
     );
     if (!newContent || newContent.trim() === '') {
@@ -67,7 +71,7 @@ const getPageContent: WorkerHandlerFn<
   GetPageContentParams,
   ChapterTreeOutput,
   Metadata
-> = async ({ resourceHref, chapterParams }, metadata) => {
+> = async ({ resourceHref, chapterParams }, metadata, signal) => {
   const { href } = resourceHref;
 
   const browser = await chromium.launch();
@@ -90,6 +94,10 @@ const getPageContent: WorkerHandlerFn<
       },
       {
         retries: 5,
+        shouldRetry: () => {
+          signal?.throwIfAborted();
+          return true;
+        },
       },
     );
 
@@ -119,6 +127,7 @@ const getPageContent: WorkerHandlerFn<
         },
         {
           retries: 5,
+          signal,
         },
       );
 
@@ -138,7 +147,7 @@ const getPageContent: WorkerHandlerFn<
         throw new Error('Resource URL not found from page requests');
       }
 
-      htmlBody = await fetchHtmlContent(resourceUrl);
+      htmlBody = await fetchHtmlContent(resourceUrl, signal);
     } catch (error) {
       const errorContext: LogContext = chapterParams;
       logError('Failed to fetch HTML content', errorContext, error);

@@ -24,7 +24,7 @@ const getPageContentMdVie: WorkerHandlerFn<
   GetPageContentParams,
   string,
   Metadata
-> = async ({ resourceHref }) => {
+> = async ({ resourceHref }, metadata, signal) => {
   const { href } = resourceHref;
 
   const browser = await chromium.launch();
@@ -47,6 +47,7 @@ const getPageContentMdVie: WorkerHandlerFn<
       },
       {
         retries: 5,
+        signal,
       },
     );
 

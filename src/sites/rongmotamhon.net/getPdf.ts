@@ -18,7 +18,7 @@ type PdfType = {
 };
 
 const getPdfBase = (type: PdfType) => {
-  return (async ({ resourceHref, chapterParams }, metadata) => {
+  return (async ({ resourceHref, chapterParams }, metadata, signal) => {
     const { href } = resourceHref;
     const logContext = getLogContext(chapterParams, metadata, href);
 
@@ -42,6 +42,7 @@ const getPdfBase = (type: PdfType) => {
         },
         {
           retries: 5,
+          signal,
         },
       );
 
@@ -69,6 +70,7 @@ const getPdfBase = (type: PdfType) => {
           },
           {
             retries: 500,
+            signal,
           },
         );
 
@@ -86,6 +88,7 @@ const getPdfBase = (type: PdfType) => {
           },
           {
             retries: 500,
+            signal,
           },
         );
 
