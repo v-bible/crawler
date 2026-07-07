@@ -54,7 +54,7 @@ const getPageContentMdVie: WorkerHandlerFn<
     const bodyLocator = page.locator('[id="readme"]');
 
     if (!(await bodyLocator.count())) {
-      return '';
+      throw new Error(`Body element not found for href: ${href}`);
     }
 
     await bodyLocator.evaluate((el) => {

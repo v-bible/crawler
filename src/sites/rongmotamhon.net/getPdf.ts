@@ -133,7 +133,7 @@ const getPdfBase = (type: PdfType) => {
       await context.close();
       await browser.close();
     }
-  }) satisfies WorkerHandlerFn<GetPageContentParams, void, Metadata>;
+  }) satisfies WorkerHandlerFn<GetPageContentParams, undefined, Metadata>;
 };
 
 export { getPdfBase };

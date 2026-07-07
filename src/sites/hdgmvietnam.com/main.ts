@@ -36,6 +36,7 @@ export const crawler = new Crawler({
   handlers: [
     defineHandler({
       handler: {
+        name: 'getPageContent',
         fn: getPageContent,
       },
       stringify: [
@@ -58,7 +59,10 @@ export const crawler = new Crawler({
       ],
     }),
     defineHandler({
-      handler: { fn: getPageContentMd },
+      handler: {
+        name: 'getPageContentMd',
+        fn: getPageContentMd,
+      },
       stringify: [
         {
           name: 'md',
