@@ -17,6 +17,7 @@ export type GetFileNameFunction<
 
 export type WorkerHandler<TData, TOutput, TMeta> = {
   handler: {
+    name: string;
     fn: (
       params: TData,
       metadata: TMeta,

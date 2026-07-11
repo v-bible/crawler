@@ -466,7 +466,7 @@ async function downloadLessonImages(params: {
 
 export const getCatechismBook: WorkerHandlerFn<
   GetPageContentParams,
-  void,
+  undefined,
   Metadata
 > = async ({ chapterParams }) => {
   const gradeNum = chapterParams.chapterNumber;

@@ -4,8 +4,10 @@ import path from 'path';
 import { groupBy, shuffle } from 'es-toolkit';
 import { Logger } from 'winston';
 import { ZodError, z } from 'zod';
+import { getDocumentId } from './getId';
 import {
   DEFAULT_ALLOW_MISSING_MANIFEST,
+  DEFAULT_CACHE_HANDLER_DATA,
   DEFAULT_CHECKPOINT_DIR,
   DEFAULT_CRAWL_COUNT,
   DEFAULT_ONLY_CHECK_MANIFEST,
@@ -118,7 +120,7 @@ type CrawlerArgs = Omit<GenreParams, 'genre'> & {
   handlers: Array<
     | CrawlerWorkerHandler<GetPageContentParams, ChapterTreeOutput, Metadata>
     | CrawlerWorkerHandler<GetPageContentParams, string, Metadata>
-    | CrawlerWorkerHandler<GetPageContentParams, void, Metadata>
+    | CrawlerWorkerHandler<GetPageContentParams, undefined, Metadata>
   >;
   checkpointFilePath?: string;
   outputFileDir?: string;
@@ -127,6 +129,7 @@ type CrawlerArgs = Omit<GenreParams, 'genre'> & {
   subTaskConcurrencyLimit?: number;
   onlyCheckManifest?: boolean;
   recrawlAllowMissingManifest?: boolean;
+  cacheHandlerData?: boolean;
 };
 
 async function runWithConcurrency<T>(
@@ -182,7 +185,7 @@ class Crawler {
   handlers: Array<
     | CrawlerWorkerHandler<GetPageContentParams, ChapterTreeOutput, Metadata>
     | CrawlerWorkerHandler<GetPageContentParams, string, Metadata>
-    | CrawlerWorkerHandler<GetPageContentParams, void, Metadata>
+    | CrawlerWorkerHandler<GetPageContentParams, undefined, Metadata>
   >;
 
   checkpointOptions: WithCheckpointOptions<Metadata>;
@@ -198,6 +201,8 @@ class Crawler {
   onlyCheckManifest?: boolean;
 
   recrawlAllowMissingManifest?: boolean;
+
+  cacheHandlerData?: boolean;
 
   constructor(args: CrawlerArgs) {
     this.name = args.name;
@@ -245,6 +250,58 @@ class Crawler {
     this.recrawlAllowMissingManifest =
       args.recrawlAllowMissingManifest ||
       DEFAULT_RECRAWL_ALLOW_MISSING_MANIFEST;
+
+    this.cacheHandlerData = args.cacheHandlerData || DEFAULT_CACHE_HANDLER_DATA;
+  }
+
+  private getCacheHandlerData<TData>(
+    name: string,
+    metadata: Metadata,
+  ): {
+    data?: TData;
+    setCache: (data: TData) => void;
+  } {
+    const cacheFilePath = path.join(
+      this.outputFileDir,
+      'cache',
+      getDocumentId({
+        ...this.domainParams,
+        genre: metadata.genre.code,
+        documentNumber: metadata.documentNumber,
+      }),
+      name,
+    );
+
+    const setCache = (data: TData) => {
+      try {
+        // NOTE: Only write cache file if data is not undefined
+        if (data) {
+          mkdirSync(path.dirname(cacheFilePath), { recursive: true });
+          writeFileSync(cacheFilePath, JSON.stringify(data));
+          logger.info(`Cache file written successfully to ${cacheFilePath}`);
+        }
+      } catch (error) {
+        logger.error(`Error writing cache file ${cacheFilePath}:`, error);
+      }
+    };
+
+    // NOTE: Return cached data if it exists
+    if (existsSync(cacheFilePath)) {
+      try {
+        const cachedData = readFileSync(cacheFilePath, 'utf8');
+        return {
+          data: JSON.parse(cachedData) as TData,
+          setCache,
+        };
+      } catch (error) {
+        logger.error(`Error reading cache file ${cacheFilePath}:`, error);
+      }
+    }
+
+    return {
+      data: undefined,
+      setCache,
+    };
   }
 
   private async checkManifestList() {
@@ -297,6 +354,7 @@ class Crawler {
             handlers: this.handlers.map((handler) => ({
               handler: {
                 ...handler.handler,
+                // NOTE: Set a dummy function to avoid executing the actual handler function during manifest check
                 fn: () => Promise.resolve({}),
                 onStart: () => {
                   if (handler.handler.output) {
@@ -327,6 +385,8 @@ class Crawler {
               stringify: handler.stringify?.map((stringify) => {
                 return {
                   ...stringify,
+                  // NOTE: Set a dummy function to avoid executing the actual
+                  // handler function during manifest check
                   fn: () => '',
                   onStart: () => {
                     if (stringify.output) {
@@ -591,6 +651,35 @@ class Crawler {
               handlers: this.handlers.map((handler) => ({
                 handler: {
                   ...handler.handler,
+                  fn: (async (params, meta, signal) => {
+                    if (!this.cacheHandlerData) {
+                      return handler.handler.fn(params, meta, signal);
+                    }
+
+                    const { data: cachedData, setCache } =
+                      this.getCacheHandlerData<
+                        Awaited<ReturnType<typeof handler.handler.fn>>
+                      >(handler.handler.name, meta);
+
+                    if (cachedData !== undefined) {
+                      return cachedData;
+                    }
+
+                    const newCacheData = await handler.handler.fn(
+                      params,
+                      meta,
+                      signal,
+                    );
+                    if (newCacheData) {
+                      setCache(newCacheData);
+                    }
+
+                    return newCacheData;
+                  }) satisfies WorkerHandler<
+                    GetPageContentParams,
+                    unknown,
+                    Metadata
+                  >['handler']['fn'],
                   onError: (error, log) => {
                     handler.handler.onError?.(error, log);
 

@@ -23,6 +23,7 @@ export const crawler = new Crawler({
   handlers: [
     defineHandler({
       handler: {
+        name: 'getPageContent',
         fn: getPageContent,
       },
       stringify: [
@@ -46,6 +47,7 @@ export const crawler = new Crawler({
     }),
     defineHandler({
       handler: {
+        name: 'getPageContentMd',
         fn: async ({ resourceHref }) => {
           if (!resourceHref.props?.mdHref) {
             throw new Error('MD href is not provided');

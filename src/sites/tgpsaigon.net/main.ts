@@ -29,6 +29,7 @@ export const crawler = new Crawler({
   handlers: [
     defineHandler({
       handler: {
+        name: 'getCatechismBook',
         fn: getCatechismBook,
         // REVIEW: Setup output for manifest checking
       },

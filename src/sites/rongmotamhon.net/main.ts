@@ -28,6 +28,7 @@ export const crawler = new Crawler({
   handlers: [
     defineHandler({
       handler: {
+        name: 'getPageContent',
         fn: getPageContent,
       },
       stringify: [
@@ -59,6 +60,7 @@ export const crawler = new Crawler({
     }),
     defineHandler({
       handler: {
+        name: 'getPageContentVie',
         fn: getPageContentVie,
       },
       stringify: [
@@ -92,7 +94,10 @@ export const crawler = new Crawler({
       ],
     }),
     defineHandler({
-      handler: { fn: getPageContentMdVie },
+      handler: {
+        name: 'getPageContentMdVie',
+        fn: getPageContentMdVie,
+      },
       stringify: [
         {
           name: 'md',
@@ -107,6 +112,7 @@ export const crawler = new Crawler({
     }),
     defineHandler({
       handler: {
+        name: 'getPdfCanLong',
         fn: getPdfBase({ label: 'Càn Long', suffix: '_can-long' }),
         output: {
           extension: 'pdf',
@@ -118,6 +124,7 @@ export const crawler = new Crawler({
     }),
     defineHandler({
       handler: {
+        name: 'getPdfVinhLac',
         fn: getPdfBase({ label: 'Vĩnh Lạc', suffix: '_vinh-lac' }),
         output: {
           extension: 'pdf',
@@ -129,6 +136,7 @@ export const crawler = new Crawler({
     }),
     defineHandler({
       handler: {
+        name: 'getPdfCBETA',
         fn: getPdfBase({ label: 'CBETA', suffix: '_cbeta' }),
         output: {
           extension: 'pdf',
