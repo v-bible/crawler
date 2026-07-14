@@ -17,6 +17,7 @@ export type Checkpoint<
   completed: boolean;
   params: TTask;
   subtasks: Checkpoint<TSubtask, never>[] | null;
+  skipHandler?: string[]; // Optional array of handler names to skip for this checkpoint
 };
 
 export type WithCheckpointOptions<TTask extends Record<string, unknown>> = {

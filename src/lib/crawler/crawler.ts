@@ -625,9 +625,19 @@ class Crawler {
               'extension'
             >;
 
+            const handlers = this.handlers.filter((handler) => {
+              if (checkpoint.skipHandler?.includes(handler.handler.name)) {
+                logger.info(
+                  `Skipping handler ${handler.handler.name} for checkpoint ${checkpoint.id}`,
+                );
+                return false;
+              }
+              return true;
+            });
+
             await new Worker({
               shardIndex,
-              handlers: this.handlers.map((handler) => ({
+              handlers: handlers.map((handler) => ({
                 handler: {
                   ...handler.handler,
                   fn: (async (params, meta, signal) => {
