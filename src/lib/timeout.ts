@@ -6,22 +6,26 @@ const withTimeout = async <T>(
   const controller = new AbortController();
   const { signal } = controller;
 
+  // Keep track of the timer ID outside the promise scope
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
   const timeoutPromise = new Promise<never>((_, reject) => {
-    const timer = setTimeout(() => {
-      controller.abort(); // Fire the abort event
+    timer = setTimeout(() => {
+      controller.abort();
       reject(new Error(timeoutMessage));
     }, timeoutMs);
-
-    signal.addEventListener('abort', () => clearTimeout(timer));
   });
 
   try {
-    // Pass the signal. Existing handlers will just ignore it.
-    // New/updated handlers can choose to accept it.
     return await Promise.race([taskFn(signal), timeoutPromise]);
   } catch (error) {
     controller.abort();
     throw error;
+  } finally {
+    // This executes whether the race wins, loses, or throws
+    if (timer) {
+      clearTimeout(timer);
+    }
   }
 };
 

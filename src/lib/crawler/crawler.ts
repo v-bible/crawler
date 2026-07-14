@@ -321,7 +321,8 @@ class Crawler {
       allowMissing?: boolean;
     }[] = [];
 
-    await runWithConcurrency(data, this.crawlerCount, async (checkpoint) => {
+    // eslint-disable-next-line no-restricted-syntax
+    for await (const checkpoint of data) {
       const metadata = checkpoint.params;
 
       const documentParams = {
@@ -330,100 +331,74 @@ class Crawler {
         documentNumber: +metadata.documentNumber,
       };
 
-      await runWithConcurrency(
-        checkpoint.subtasks || [],
-        this.subTaskConcurrencyLimit,
-        async (subtask) => {
-          const { href, props } = subtask.params;
+      // eslint-disable-next-line no-restricted-syntax
+      for await (const subtask of checkpoint.subtasks || []) {
+        const { props } = subtask.params;
 
-          const chapterParams = {
-            ...documentParams,
-            chapterNumber: props?.chapterNumber || 1,
-            chapterName: props?.chapterName || '',
-          };
+        const chapterParams = {
+          ...documentParams,
+          chapterNumber: props?.chapterNumber || 1,
+          chapterName: props?.chapterName || '',
+        };
 
-          const getFileNameParams = {
-            ...chapterParams,
-            documentTitle: metadata.title,
-          } satisfies Omit<
-            Parameters<GetDefaultDocumentPathFunction>['0'],
-            'extension'
-          >;
+        const getFileNameParams = {
+          ...chapterParams,
+          documentTitle: metadata.title,
+        } satisfies Omit<
+          Parameters<GetDefaultDocumentPathFunction>['0'],
+          'extension'
+        >;
 
-          await new Worker({
-            handlers: this.handlers.map((handler) => ({
-              handler: {
-                ...handler.handler,
-                // NOTE: Set a dummy function to avoid executing the actual handler function during manifest check
-                fn: () => Promise.resolve({}),
-                onStart: () => {
-                  if (handler.handler.output) {
-                    const manifestFileName = handler.handler.output.getFileName(
-                      {
-                        ...getFileNameParams,
-                        extension: handler.handler.output.extension,
-                        suffix: handler.handler.output.suffix,
-                      },
-                    );
+        // eslint-disable-next-line no-loop-func
+        this.handlers.forEach((handler) => {
+          if (handler.handler.output) {
+            const manifestFileName = handler.handler.output.getFileName({
+              ...getFileNameParams,
+              extension: handler.handler.output.extension,
+              suffix: handler.handler.output.suffix,
+            });
 
-                    const manifestFilePath = path.join(
-                      this.outputFileDir,
-                      manifestFileName,
-                    );
+            const manifestFilePath = path.join(
+              this.outputFileDir,
+              manifestFileName,
+            );
 
-                    manifestFile = manifestFile.concat({
-                      documentId: metadata.documentId,
-                      chapterNumber: chapterParams.chapterNumber,
-                      filePath: manifestFilePath,
-                      allowMissing:
-                        handler.handler.output.allowMissing ||
-                        DEFAULT_ALLOW_MISSING_MANIFEST,
-                    });
-                  }
-                },
-              },
-              stringify: handler.stringify?.map((stringify) => {
-                return {
-                  ...stringify,
-                  // NOTE: Set a dummy function to avoid executing the actual
-                  // handler function during manifest check
-                  fn: () => '',
-                  onStart: () => {
-                    if (stringify.output) {
-                      const manifestFileName = stringify.output.getFileName({
-                        ...getFileNameParams,
-                        extension: stringify.output.extension,
-                        suffix: stringify.output.suffix,
-                      });
+            manifestFile = manifestFile.concat({
+              documentId: metadata.documentId,
+              chapterNumber: chapterParams.chapterNumber,
+              filePath: manifestFilePath,
+              allowMissing:
+                handler.handler.output.allowMissing ||
+                DEFAULT_ALLOW_MISSING_MANIFEST,
+            });
+          }
 
-                      const manifestFilePath = path.join(
-                        this.outputFileDir,
-                        manifestFileName,
-                      );
+          handler.stringify?.forEach((stringify) => {
+            if (stringify.output) {
+              const manifestFileName = stringify.output.getFileName({
+                ...getFileNameParams,
+                extension: stringify.output.extension,
+                suffix: stringify.output.suffix,
+              });
 
-                      manifestFile = manifestFile.concat({
-                        documentId: metadata.documentId,
-                        chapterNumber: chapterParams.chapterNumber,
-                        filePath: manifestFilePath,
-                        allowMissing:
-                          stringify.output.allowMissing ||
-                          DEFAULT_ALLOW_MISSING_MANIFEST,
-                      });
-                    }
-                  },
-                };
-              }),
-            })),
-          }).run(
-            {
-              resourceHref: { href, props },
-              chapterParams,
-            },
-            metadata,
-          );
-        },
-      );
-    });
+              const manifestFilePath = path.join(
+                this.outputFileDir,
+                manifestFileName,
+              );
+
+              manifestFile = manifestFile.concat({
+                documentId: metadata.documentId,
+                chapterNumber: chapterParams.chapterNumber,
+                filePath: manifestFilePath,
+                allowMissing:
+                  stringify.output.allowMissing ||
+                  DEFAULT_ALLOW_MISSING_MANIFEST,
+              });
+            }
+          });
+        });
+      }
+    }
 
     const missingManifests = manifestFile.filter((manifest) => {
       if (!existsSync(manifest.filePath)) {
@@ -510,6 +485,10 @@ class Crawler {
     writeFileSync(
       this.checkpointFilePath,
       JSON.stringify(updatedCheckpointData, null, 2),
+    );
+
+    logger.info(
+      `Checkpoint file updated successfully: ${this.checkpointFilePath}`,
     );
   }
 
