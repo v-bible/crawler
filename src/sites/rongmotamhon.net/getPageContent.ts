@@ -5,11 +5,7 @@ import { chromium, devices } from 'playwright';
 import { type GetPageContentParams } from '@/lib/crawler/crawler';
 import { getPageId, getSentenceId } from '@/lib/crawler/getId';
 import { type LogContext, logError } from '@/lib/crawler/logUtils';
-import {
-  type Metadata,
-  type MultiLanguageSentence,
-  type Page,
-} from '@/lib/crawler/schema';
+import { type Metadata, type Page } from '@/lib/crawler/schema';
 import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
 import { pageToChapterTree } from '@/lib/crawler/treeUtils';
 import { type WorkerHandlerFn } from '@/lib/crawler/worker';
@@ -160,104 +156,103 @@ const getPageContent: WorkerHandlerFn<
       waitUntil: 'domcontentloaded',
     });
 
-    const charactersData = await page.evaluate(() => {
-      const links = Array.from(document.querySelectorAll('a'));
+    await page.evaluate(() => {
+      document.querySelectorAll('br').forEach((br) => {
+        br.textContent = '\n';
+      });
 
-      return links
-        .map((link, index, array) => {
-          let chineseVietnameseCharacter =
-            link.getAttribute('data-am')?.trim() || '';
-          const span = link.querySelector('span');
-          const chineseCharacter = span?.textContent?.trim() || '';
-
-          // NOTE: If chinese character is empty, it means the link text is
-          // Chinese-Vietnamese should be empty too since it's 1-1 mapping. This is to handle cases where the link text is only punctuation or special characters.
-          if (chineseCharacter === '') {
-            chineseVietnameseCharacter = chineseCharacter;
-          }
-
-          // Get all text between this link and the next link
-          let { nextSibling } = link;
-          let punctuation = '';
-
-          // Collect all text from text nodes until we hit another element
-          while (nextSibling && nextSibling.nodeName === 'SPAN') {
-            const text = nextSibling.textContent || '';
-            // Remove only whitespace, keep all other characters (punctuation, brackets, etc.)
-            const trimmedText = text.replace(/\s+/g, '');
-            if (trimmedText) {
-              punctuation += trimmedText;
-            }
-            // eslint-disable-next-line prefer-destructuring
-            nextSibling = nextSibling.nextSibling;
-          }
-
-          // Check if the next element is br
-          const isEndOfSentence =
-            nextSibling?.nodeName === 'BR' || index === array.length - 1;
-
-          return {
-            chineseVietnameseCharacter: chineseVietnameseCharacter.trim(),
-            chineseCharacter,
-            punctuation,
-            isEndOfSentence,
-            index,
-          };
-        })
-        .filter((item) => item.chineseCharacter !== ''); // Filter out any items that are completely empty
+      document.querySelectorAll('a').forEach((a) => {
+        const dataAm = a.getAttribute('data-am');
+        const textContent = a.textContent?.trim();
+        const isChineseCharacter =
+          textContent && /[\u4e00-\u9fff]/.test(textContent);
+        if (dataAm && isChineseCharacter) {
+          a.textContent = `$${a.textContent}\${{${dataAm}}}`;
+        }
+      });
     });
 
-    // Process the scraped data to build sentences
-    const sentences: MultiLanguageSentence[] = [];
-    let currentChineseVietnameseSentence: string[] = [];
-    let currentChineseSentence: string[] = [];
-    let sentenceNumber = 1;
+    const bodyContent = await page.locator('body').textContent();
 
-    for (const characterData of charactersData) {
-      currentChineseVietnameseSentence.push(
-        characterData.chineseVietnameseCharacter,
-      );
-      currentChineseSentence.push(characterData.chineseCharacter);
+    const sentences =
+      bodyContent
+        ?.split('\n')
+        .map((line) =>
+          line.replaceAll(/^.*║/gm, '').replaceAll(/No.*/gm, '').trim(),
+        )
+        .filter((line) => line.trim() !== '')
+        .map((line, index) => {
+          const hasCVChar = line.includes('{{') && line.includes('}}');
 
-      // Add punctuation if present (same for both languages since it's 1-1 translation)
-      if (characterData.punctuation) {
-        currentChineseVietnameseSentence.push(characterData.punctuation);
-        currentChineseSentence.push(characterData.punctuation);
-      }
+          let CVLine = line
+            .replaceAll(/(\$.*?\$)(\{\{(.*?)\}\})/g, '$3 ')
+            // NOTE: Remove extra spaces between words and trim leading/trailing
+            // spaces
+            .replaceAll(/\s+/g, ' ');
+          const CLine = line
+            .replaceAll(/\$(.*?)\$\{\{.*?\}\}/g, '$1')
+            // NOTE: Remove extra spaces between words and trim leading/trailing
+            // spaces
+            .replaceAll(/\s+/g, ' ')
+            .trim();
 
-      if (characterData.isEndOfSentence) {
-        sentences.push({
+          if (hasCVChar) {
+            CVLine = CVLine
+              // NOTE: Remove spaces before punctuation marks
+              .replaceAll(/\s+([,;.!?:，。；！？：、])/g, '$1')
+              // NOTE: Add spaces after punctuation marks
+              .replaceAll(/([,;.!?:，。；！？：、])\s*/g, '$1 ')
+              // NOTE: Remove spaces after opening brackets and before closing
+              // common brackets
+              .replaceAll(/([([{《「])\s*/g, '$1')
+              .replaceAll(/\s*([)\]}》」])/g, '$1')
+              // NOTE: Add space after closing brackets
+              .replaceAll(/([)\]}》」])\s*/g, '$1 ')
+              // NOTE: Remove spaces before special asterisks
+              .replaceAll(/\s*\*\s*/g, '*')
+              // NOTE: Add space between closing and opening brackets if they are
+              // adjacent (e.g., ")(" should become ") (")
+              .replaceAll(
+                /[)\]}》」][([{《「]/g,
+                (match) => `${match[0]} ${match[1]}`,
+              )
+              // NOTE: Normalize common chinese punctuation to their Vietnamese equivalents
+              .replaceAll(/，/g, ',')
+              .replaceAll(/。/g, '.')
+              .replaceAll(/；/g, ';')
+              .replaceAll(/！/g, '!')
+              .replaceAll(/？/g, '?')
+              .replaceAll(/：/g, ':')
+              .trim();
+          }
+
+          return {
+            sentenceNumber: index + 1,
+            array: [
+              {
+                languageCode: 'CV' as const,
+                text: CVLine,
+              },
+              {
+                languageCode: 'C' as const,
+                text: CLine,
+              },
+            ],
+          };
+        }) || [];
+
+    const mappedSentences = sentences.map(
+      (sentence, index) =>
+        ({
           type: 'multiple',
-          array: [
-            {
-              languageCode: 'CV',
-              // Chinese-Vietnamese needs spaces between syllables, but not before punctuation
-              text: currentChineseVietnameseSentence
-                .join(' ')
-                .replace(/\s+([,;.!?:，。；！？：、《》「」])/g, '$1')
-                .trim(),
-            },
-            {
-              languageCode: 'C',
-              // Chinese has no spaces between characters
-              text: currentChineseSentence
-                .join('')
-                .replaceAll('No.', '')
-                .trim(),
-            },
-          ],
+          array: sentence.array,
           id: getSentenceId({
             ...chapterParams,
             pageNumber: 1,
-            sentenceNumber,
+            sentenceNumber: index + 1,
           }),
-        });
-
-        currentChineseVietnameseSentence = [];
-        currentChineseSentence = [];
-        sentenceNumber += 1;
-      }
-    }
+        }) as const,
+    );
 
     const pageData = [
       {
@@ -270,7 +265,7 @@ const getPageContent: WorkerHandlerFn<
           genre: chapterParams.genre,
         }),
         number: 1,
-        sentences,
+        sentences: mappedSentences,
       },
     ] satisfies Page[];
 
