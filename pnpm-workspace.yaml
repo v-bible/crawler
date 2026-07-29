@@ -1,3 +1,8 @@
+allowBuilds:
+  '@playwright/browser-chromium': true
+  unrs-resolver: false
+minimumReleaseAgeExclude:
+  - pdfjs-dist@6.2.108
 onlyBuiltDependencies:
   - '@playwright/browser-chromium'
   - esbuild
