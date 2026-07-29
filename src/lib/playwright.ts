@@ -1,9 +1,8 @@
 import { type Page } from 'playwright';
 
 const evalLog = (page: Page) => {
-  // @ts-expect-error - Playwright types
   // eslint-disable-next-line no-console
-  page.on('console', (msg) => console[msg.type()]('PAGE LOG:', msg.text()));
+  page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
 };
 
 export { evalLog };
