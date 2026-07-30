@@ -349,8 +349,18 @@ class Crawler {
           'extension'
         >;
 
+        const handlers = this.handlers.filter((handler) => {
+          if (subtask.skipHandler?.includes(handler.handler.name)) {
+            logger.info(
+              `Skipping handler ${handler.handler.name} for subtask ${subtask.id} of checkpoint ${checkpoint.id}`,
+            );
+            return false;
+          }
+          return true;
+        });
+
         // eslint-disable-next-line no-loop-func
-        this.handlers.forEach((handler) => {
+        handlers.forEach((handler) => {
           if (handler.handler.output) {
             const manifestFileName = handler.handler.output.getFileName({
               ...getFileNameParams,
@@ -626,9 +636,9 @@ class Crawler {
             >;
 
             const handlers = this.handlers.filter((handler) => {
-              if (checkpoint.skipHandler?.includes(handler.handler.name)) {
+              if (subtask.skipHandler?.includes(handler.handler.name)) {
                 logger.info(
-                  `Skipping handler ${handler.handler.name} for checkpoint ${checkpoint.id}`,
+                  `Skipping handler ${handler.handler.name} for subtask ${subtask.id} of checkpoint ${checkpoint.id}`,
                 );
                 return false;
               }
