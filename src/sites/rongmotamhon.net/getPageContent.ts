@@ -10,6 +10,127 @@ import { type ChapterTreeOutput } from '@/lib/crawler/treeSchema';
 import { pageToChapterTree } from '@/lib/crawler/treeUtils';
 import { type WorkerHandlerFn } from '@/lib/crawler/worker';
 
+export interface NormalizationResult {
+  CLine: string;
+  CVLine: string;
+}
+
+export const EXACT_CHAR_MAP: Record<string, string> = {
+  '「': '“',
+  '」': '”',
+  '『': '‘',
+  '』': '’',
+  '《': '(',
+  '》': ')',
+  '〈': '(',
+  '〉': ')',
+  '【': '[',
+  '】': ']',
+  '〔': '[',
+  '〕': ']',
+  '〖': '[',
+  '〗': ']',
+  '，': ',',
+  '；': ';',
+  '。': '.',
+  '：': ':',
+  '？': '?',
+  '！': '!',
+  '、': ',',
+  '…': '...',
+  '—': '-',
+  '·': '.',
+  '～': '~',
+  '〜': '~',
+};
+
+const RE_CV_PAIR = /\$(.*?)\$\{\{(.*?)\}\}/g;
+const RE_CH_ONLY = /\$(.*?)\$\{\{.*?\}\}/g;
+
+/**
+ * Cleans up spaces around operators inside Gaiji composition brackets [ ... ]
+ * Preserves operators: *, +, -, /, =, (, ), ?, @
+ */
+export function sanitizeGaijiFormulas(text: string): string {
+  return text.replace(/\[([^\]]+)\]/g, (_, formula: string) => {
+    const cleaned = formula
+      .replace(/\s*([*+\-/=()?@])\s*/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return `[${cleaned}]`;
+  });
+}
+
+export function replaceExactChars(text: string): string {
+  let result = text;
+  for (const [targetChar, replacement] of Object.entries(EXACT_CHAR_MAP)) {
+    result = result.split(targetChar).join(replacement);
+  }
+  return result;
+}
+
+export function normalizeSentence(line: string): NormalizationResult {
+  const hasCVChar = line.includes('{{') && line.includes('}}');
+
+  // -----------------------------------------------------------------
+  // 1. Chinese Line (CLine)
+  // -----------------------------------------------------------------
+  let CLine = line.replace(RE_CH_ONLY, '$1').replace(/\s+/g, ' ');
+  CLine = sanitizeGaijiFormulas(CLine).trim();
+
+  if (!hasCVChar) {
+    let fallbackCV = replaceExactChars(line);
+    fallbackCV = fallbackCV
+      .replace(/\s+/g, ' ')
+      .replace(/\s+([,;.!?:”’)\]}])/g, '$1')
+      .replace(/([“‘([{])\s+/g, '$1')
+      .replace(/([,;.!?:”’)\]}])(?=[\p{L}\p{N}“‘([{])/gu, '$1 ')
+      .replace(/([\p{L}\p{N}])(?=[“‘([{])/gu, '$1 ');
+
+    return {
+      CLine,
+      CVLine: sanitizeGaijiFormulas(fallbackCV).trim(),
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // 2. Sino-Vietnamese Line (CVLine)
+  // -----------------------------------------------------------------
+  let CVLine = line.replace(RE_CV_PAIR, '$2 ');
+  CVLine = replaceExactChars(CVLine);
+
+  // -----------------------------------------------------------------
+  // 3. Typography & Bracket Spacing Cleanup
+  // -----------------------------------------------------------------
+  CVLine = CVLine.replace(/\s+/g, ' ')
+    // Erase space BEFORE standard punctuation and closing elements
+    .replace(/\s+([,;.!?:”’])/g, '$1')
+    // Erase space BEFORE closing brackets/parentheses ONLY outside Gaiji blocks
+    .replace(/(?<!\[[^\]]*)\s+([)\]}])/g, '$1')
+    // Erase space AFTER opening quotes/brackets/parentheses
+    .replace(/([“‘([{])\s+/g, '$1')
+    // Ensure space AFTER punctuation OR closing quotes/brackets IF touching text/opening quotes
+    .replace(/([,;.!?:”’)\]}])(?=[\p{L}\p{N}“‘([{])/gu, '$1 ')
+    // Ensure space BEFORE opening brackets/parentheses IF preceded by letter/number
+    .replace(/([\p{L}\p{N}])(?=[([{])/gu, '$1 ')
+    // Clean redundant quotes
+    .replace(/""+/g, '"')
+    .replace(/“\s*”/g, '')
+    .replace(/‘\s*’/g, '');
+
+  // Protect Gaiji formula operators inside brackets and force space separation around them
+  CVLine = sanitizeGaijiFormulas(CVLine);
+
+  // Enforce spacing between adjacent brackets/parentheses and surrounding letters
+  CVLine = CVLine.replace(/([)\]])([\p{L}\p{N}])/gu, '$1 $2')
+    .replace(/([\p{L}\p{N}])([[(])/gu, '$1 $2')
+    .replace(/([)\]])([[(])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return { CLine, CVLine };
+}
+
 const fetchHtmlContent = async (url: string, signal?: AbortSignal) => {
   let group = 0;
   let content = '';
@@ -164,9 +285,17 @@ const getPageContent: WorkerHandlerFn<
       document.querySelectorAll('a').forEach((a) => {
         const dataAm = a.getAttribute('data-am');
         const textContent = a.textContent?.trim();
-        const isChineseCharacter =
-          textContent && /[\u4e00-\u9fff]/.test(textContent);
-        if (dataAm && isChineseCharacter) {
+
+        // 1. Verify the string actually contains a Chinese character
+        const hasChinese = textContent && /[\u4e00-\u9fff]/.test(textContent);
+
+        // 2. Reject the string if it contains ANY Gaiji math or structural operators.
+        // We include brackets [ ] here to prevent wrapping entire grouped formulas.
+        const hasGaijiOperators =
+          textContent && /[*+\-/=()?[\]@]/.test(textContent);
+
+        // Only inject the phonetic tag if it's a pure character/word without operators
+        if (dataAm && hasChinese && !hasGaijiOperators) {
           a.textContent = `$${a.textContent}\${{${dataAm}}}`;
         }
       });
@@ -180,51 +309,9 @@ const getPageContent: WorkerHandlerFn<
         .map((line) =>
           line.replaceAll(/^.*║/gm, '').replaceAll(/No.*/gm, '').trim(),
         )
-        .filter((line) => line.trim() !== '')
+        .filter((line) => line !== '')
         .map((line, index) => {
-          const hasCVChar = line.includes('{{') && line.includes('}}');
-
-          let CVLine = line
-            .replaceAll(/(\$.*?\$)(\{\{(.*?)\}\})/g, '$3 ')
-            // NOTE: Remove extra spaces between words and trim leading/trailing
-            // spaces
-            .replaceAll(/\s+/g, ' ');
-          const CLine = line
-            .replaceAll(/\$(.*?)\$\{\{.*?\}\}/g, '$1')
-            // NOTE: Remove extra spaces between words and trim leading/trailing
-            // spaces
-            .replaceAll(/\s+/g, ' ')
-            .trim();
-
-          if (hasCVChar) {
-            CVLine = CVLine
-              // NOTE: Remove spaces before punctuation marks
-              .replaceAll(/\s+([,;.!?:，。；！？：、])/g, '$1')
-              // NOTE: Add spaces after punctuation marks
-              .replaceAll(/([,;.!?:，。；！？：、])\s*/g, '$1 ')
-              // NOTE: Remove spaces after opening brackets and before closing
-              // common brackets
-              .replaceAll(/([([{《「])\s*/g, '$1')
-              .replaceAll(/\s*([)\]}》」])/g, '$1')
-              // NOTE: Add space after closing brackets
-              .replaceAll(/([)\]}》」])\s*/g, '$1 ')
-              // NOTE: Remove spaces before special asterisks
-              .replaceAll(/\s*\*\s*/g, '*')
-              // NOTE: Add space between closing and opening brackets if they are
-              // adjacent (e.g., ")(" should become ") (")
-              .replaceAll(
-                /[)\]}》」][([{《「]/g,
-                (match) => `${match[0]} ${match[1]}`,
-              )
-              // NOTE: Normalize common chinese punctuation to their Vietnamese equivalents
-              .replaceAll(/，/g, ',')
-              .replaceAll(/。/g, '.')
-              .replaceAll(/；/g, ';')
-              .replaceAll(/！/g, '!')
-              .replaceAll(/？/g, '?')
-              .replaceAll(/：/g, ':')
-              .trim();
-          }
+          const { CLine, CVLine } = normalizeSentence(line);
 
           return {
             sentenceNumber: index + 1,
