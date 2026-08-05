@@ -98,7 +98,7 @@ const extractFootnoteRef = async (
 const getPageContent: WorkerHandlerFn<
   GetPageContentParams,
   ChapterTreeOutput,
-  Metadata
+  Partial<Metadata>
 > = async ({ resourceHref, chapterParams }, metadata) => {
   const { href } = resourceHref;
 

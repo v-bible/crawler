@@ -467,7 +467,7 @@ async function downloadLessonImages(params: {
 export const getCatechismBook: WorkerHandlerFn<
   GetPageContentParams,
   undefined,
-  Metadata
+  Partial<Metadata>
 > = async ({ chapterParams }) => {
   const gradeNum = chapterParams.chapterNumber;
   const gradeTitle = `Hiệp thông ${gradeNum}`;

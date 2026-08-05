@@ -17,7 +17,7 @@ import { type WorkerHandlerFn } from '@/lib/crawler/worker';
 const getPageContentVie: WorkerHandlerFn<
   GetPageContentParams,
   ChapterTreeOutput,
-  Metadata
+  Partial<Metadata>
 > = async ({ resourceHref, chapterParams }, metadata, signal) => {
   const { href } = resourceHref;
 

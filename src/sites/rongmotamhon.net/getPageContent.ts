@@ -187,7 +187,7 @@ const fetchHtmlContent = async (url: string, signal?: AbortSignal) => {
 const getPageContent: WorkerHandlerFn<
   GetPageContentParams,
   ChapterTreeOutput,
-  Metadata
+  Partial<Metadata>
 > = async ({ resourceHref, chapterParams }, metadata, signal) => {
   const { href } = resourceHref;
 

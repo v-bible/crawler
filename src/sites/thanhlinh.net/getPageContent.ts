@@ -33,7 +33,7 @@ import { winkNLPInstance } from '@/lib/wink-nlp';
 const getPageContent: WorkerHandlerFn<
   GetPageContentParams,
   ChapterTreeOutput,
-  Metadata
+  Partial<Metadata>
 > = async ({ resourceHref, chapterParams }, metadata) => {
   const { href } = resourceHref;
 

@@ -23,7 +23,7 @@ import { parseMd } from '@/lib/md/remark';
 const getPageContentMdVie: WorkerHandlerFn<
   GetPageContentParams,
   string,
-  Metadata
+  Partial<Metadata>
 > = async ({ resourceHref }, metadata, signal) => {
   const { href } = resourceHref;
 

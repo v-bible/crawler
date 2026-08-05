@@ -124,7 +124,7 @@ const processGospel = async (locator: Locator) => {
 const getPageContentDaily: WorkerHandlerFn<
   GetPageContentParams,
   ChapterTreeOutput,
-  Metadata
+  Partial<Metadata>
 > = async ({ resourceHref, chapterParams }, metadata) => {
   const { href } = resourceHref;
 
