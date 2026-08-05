@@ -166,7 +166,7 @@ const main = () => {
     const newTree = updateAnnotations(treeData, newAnnotations);
 
     // NOTE: We don't need to wrap NER label in sentence for json tree
-    const { content: jsonTree } = stringifyJsonTree(newTree);
+    const jsonTree = stringifyJsonTree(newTree);
 
     const treeWithAnnotation = generateDataTreeWithAnnotation({
       chapterParams,
@@ -177,7 +177,7 @@ const main = () => {
       annotations: newAnnotations,
     });
 
-    const { content: xmlTree } = stringifyXmlTree(treeWithAnnotation);
+    const xmlTree = stringifyXmlTree(treeWithAnnotation);
 
     writeChapterContent({
       params: chapterParams,
