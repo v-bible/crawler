@@ -61,7 +61,7 @@ export const defaultParseDate = (date: string): Date => {
 
 export type GenerateTreeParams = {
   chapterParams: ChapterParams;
-  metadata: MetadataInput;
+  metadata: Partial<MetadataInput>;
   pages: Page[];
   footnotes: TreeFootnote[];
   headings: SentenceHeading[];
@@ -482,7 +482,7 @@ const generateDataTreeWithAnnotation = (
 const pageToChapterTree = (
   pageData: Page[],
   chapterParams: ChapterParams,
-  metadata: Metadata,
+  metadata: Partial<Metadata>,
 ): ChapterTreeOutput => {
   const parsedPage = PageSchema.array().parse(pageData);
 

@@ -118,9 +118,13 @@ type CrawlerArgs = Omit<GenreParams, 'genre'> & {
   skipSubtaskCheckpointCheck?: boolean;
   getChapters: GetChaptersFunction;
   handlers: Array<
-    | CrawlerWorkerHandler<GetPageContentParams, ChapterTreeOutput, Metadata>
-    | CrawlerWorkerHandler<GetPageContentParams, string, Metadata>
-    | CrawlerWorkerHandler<GetPageContentParams, undefined, Metadata>
+    | CrawlerWorkerHandler<
+        GetPageContentParams,
+        ChapterTreeOutput,
+        Partial<Metadata>
+      >
+    | CrawlerWorkerHandler<GetPageContentParams, string, Partial<Metadata>>
+    | CrawlerWorkerHandler<GetPageContentParams, undefined, Partial<Metadata>>
   >;
   checkpointFilePath?: string;
   outputFileDir?: string;
@@ -662,6 +666,32 @@ class Crawler {
 
                     if (cachedData !== undefined) {
                       return cachedData;
+                    }
+
+                    // NOTE: If the handler has an output defined, we can check
+                    // whether the output file already exists and skip the
+                    // handler if it does. This is useful for handlers that
+                    // generate files, as we can avoid re-generating files that
+                    // already exist.
+                    if (handler.handler.output) {
+                      const manifestFileName =
+                        handler.handler.output.getFileName({
+                          ...getFileNameParams,
+                          extension: handler.handler.output.extension,
+                          suffix: handler.handler.output.suffix,
+                        });
+
+                      const manifestFilePath = path.join(
+                        this.outputFileDir,
+                        manifestFileName,
+                      );
+
+                      if (existsSync(manifestFilePath)) {
+                        logger.info(
+                          `Skipping handler ${handler.handler.name} for subtask ${subtask.id} of checkpoint ${checkpoint.id} because output file already exists: ${manifestFilePath}`,
+                        );
+                        return undefined;
+                      }
                     }
 
                     const newCacheData = await handler.handler.fn(
